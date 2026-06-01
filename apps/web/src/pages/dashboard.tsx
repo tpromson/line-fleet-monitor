@@ -8,20 +8,11 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 
-interface OrgCounts {
-  orgs: number
-  providers: number
-  channels: number
-  totalUsed: number
-  totalRemaining: number
-  criticalCount: number
-}
-
 interface ChannelSummary {
   id: string
   channel_name: string
   quota_limit: number
-  latest_log: { quota_used: number; quota_remaining: number } | null
+  latest_log: { quota_used: number; quota_remaining: number; checked_at: string } | null
   latest_alert: { level: string } | null
 }
 
@@ -32,41 +23,9 @@ interface ProviderRow {
   channels: ChannelSummary[]
 }
 
-function buildCounts(providers: ProviderRow[]): OrgCounts {
-  const orgSet = new Set<string>()
-  let channels = 0
-  let totalUsed = 0
-  let totalRemaining = 0
-  let criticalCount = 0
-
-  for (const p of providers) {
-    orgSet.add(p.organization.id)
-    for (const c of p.channels) {
-      channels++
-      if (c.latest_log) {
-        totalUsed += c.latest_log.quota_used
-        totalRemaining += c.latest_log.quota_remaining
-      }
-      if (c.latest_alert?.level === 'critical') criticalCount++
-    }
-  }
-
-  return {
-    orgs: orgSet.size,
-    providers: providers.length,
-    channels,
-    totalUsed,
-    totalRemaining,
-    criticalCount,
-  }
-}
-
-function getChannelStatus(channel: ChannelSummary) {
-  if (!channel.latest_log) return 'no-data'
-  const pct = (channel.latest_log.quota_used / channel.quota_limit) * 100
-  if (pct >= 95) return 'critical'
-  if (pct >= 80) return 'warning'
-  return 'normal'
+interface OrgGroup {
+  org: { id: string; name: string }
+  providers: ProviderRow[]
 }
 
 export function DashboardPage() {
@@ -74,6 +33,14 @@ export function DashboardPage() {
   const [providers, setProviders] = useState<ProviderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [compact, setCompact] = useState(true)
+  const [collapsedOrgs, setCollapsedOrgs] = useState<Set<string>>(new Set())
+
+  const lastSyncTime = providers
+    .flatMap((p) => p.channels)
+    .map((c) => c.latest_log?.checked_at)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0]
 
   const loadDashboard = async () => {
     const { data } = await supabase
@@ -81,30 +48,29 @@ export function DashboardPage() {
       .select(`
         id, name,
         organization:organization_id (id, name),
-          channels (
-            id, channel_name, quota_limit,
-            latest_log:quota_logs(quota_used, quota_remaining, checked_at),
-            latest_alert:alerts(level)
-          )
-        `)
-        .order('name')
+        channels (
+          id, channel_name, quota_limit,
+          latest_log:quota_logs(quota_used, quota_remaining, checked_at),
+          latest_alert:alerts(level)
+        )
+      `)
+      .order('name')
 
-      if (data) {
-        const mapped: ProviderRow[] = (data as any[]).map((p) => ({
-          id: p.id,
-          name: p.name,
-          organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
-          channels: (p.channels || []).map((c: any) => ({
-            id: c.id,
-            channel_name: c.channel_name,
-            quota_limit: c.quota_limit,
-            latest_log: c.latest_log?.sort((a: any, b: any) =>
-              new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
-            )[0] ?? null,
-            latest_alert: c.latest_alert?.[0] ?? null,
-          })),
-      }))
-      setProviders(mapped)
+    if (data) {
+      setProviders((data as any[]).map((p) => ({
+        id: p.id,
+        name: p.name,
+        organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
+        channels: (p.channels || []).map((c: any) => ({
+          id: c.id,
+          channel_name: c.channel_name,
+          quota_limit: c.quota_limit,
+          latest_log: c.latest_log?.sort((a: any, b: any) =>
+            new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
+          )[0] ?? null,
+          latest_alert: c.latest_alert?.[0] ?? null,
+        })),
+      })))
     }
     setLoading(false)
   }
@@ -119,45 +85,99 @@ export function DashboardPage() {
     setSyncing(true)
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL
-      if (!backendUrl) {
-        toast.error('Backend URL not configured')
-        return
-      }
-      const res = await fetch(`${backendUrl}/api/sync`, { method: 'POST' })
-      if (res.ok) {
-        toast.success('Sync started — refreshing data...')
-        setTimeout(() => loadDashboard(), 5000)
-      } else {
-        toast.error('Sync failed')
-      }
+      if (!backendUrl) { toast.error('Backend URL not configured'); return }
+      await fetch(`${backendUrl}/api/sync`, { method: 'POST' })
+      toast.success('Sync started — refreshing...')
+      setTimeout(() => loadDashboard(), 5000)
     } catch {
       toast.error('Cannot reach backend')
-    } finally {
-      setSyncing(false)
+    } finally { setSyncing(false) }
+  }
+
+  // Compute counts
+  const orgSet = new Set(providers.map((p) => p.organization.id))
+  let totalChannels = 0, totalUsed = 0, totalRemaining = 0, criticalCount = 0
+  for (const p of providers) {
+    for (const c of p.channels) {
+      totalChannels++
+      if (c.latest_log) { totalUsed += c.latest_log.quota_used; totalRemaining += c.latest_log.quota_remaining }
+      if (c.latest_alert?.level === 'critical') criticalCount++
     }
   }
 
-  const counts = buildCounts(providers)
+  // Group by Organization
+  const orgGroups: OrgGroup[] = []
+  const orgMap = new Map<string, OrgGroup>()
+  for (const p of providers) {
+    let group = orgMap.get(p.organization.id)
+    if (!group) {
+      group = { org: p.organization, providers: [] }
+      orgMap.set(p.organization.id, group)
+      orgGroups.push(group)
+    }
+    group.providers.push(p)
+  }
+
+  const toggleOrg = (id: string) => {
+    setCollapsedOrgs((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const getStatus = (channel: ChannelSummary) => {
+    if (!channel.latest_log) return 'no-data'
+    const pct = (channel.latest_log.quota_used / channel.quota_limit) * 100
+    if (pct >= 95) return 'critical'
+    if (pct >= 80) return 'warning'
+    return 'normal'
+  }
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case 'critical': return <Badge variant="destructive">Critical</Badge>
-      case 'warning': return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Warning</Badge>
-      case 'normal': return <Badge variant="secondary">Normal</Badge>
-      default: return <Badge variant="outline">No Data</Badge>
+      case 'critical': return <Badge variant="destructive">Crit</Badge>
+      case 'warning': return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Warn</Badge>
+      case 'normal': return <Badge variant="secondary">OK</Badge>
+      default: return <Badge variant="outline">-</Badge>
     }
   }
+
+  const providerHasIssue = (pr: ProviderRow) =>
+    pr.channels.some((c) => getStatus(c) !== 'normal' && getStatus(c) !== 'no-data')
+
+  // Summary card helper
+  const StatCard = ({ icon, value, label, warn }: { icon: string; value: string; label: string; warn?: boolean }) => (
+    <Card className={warn ? 'border-destructive' : ''}>
+      <CardContent className="pt-4 pb-3">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">{icon}</span>
+          <span className={`text-xl font-bold ${warn ? 'text-destructive' : ''}`}>{value}</span>
+        </div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground">Overview of all your LINE channels</p>
+          <p className="text-muted-foreground text-xs">
+            {lastSyncTime
+              ? `Last sync: ${new Date(lastSyncTime).toLocaleString()}`
+              : 'No data yet'}
+          </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-          {syncing ? 'Syncing...' : 'Sync Now'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setCompact(!compact)}>
+            {compact ? 'Expand All' : 'Compact'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+            {syncing ? 'Syncing...' : 'Sync Now'}
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -167,103 +187,106 @@ export function DashboardPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{counts.orgs}</div>
-              <p className="text-xs text-muted-foreground">Organizations</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{counts.providers}</div>
-              <p className="text-xs text-muted-foreground">Providers</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{counts.channels}</div>
-              <p className="text-xs text-muted-foreground">Channels</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{counts.totalUsed.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Used</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{counts.totalRemaining.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Remaining</p>
-            </CardContent>
-          </Card>
-          <Card className={counts.criticalCount > 0 ? 'border-destructive' : ''}>
-            <CardContent className="pt-6">
-              <div className={`text-2xl font-bold ${counts.criticalCount > 0 ? 'text-destructive' : ''}`}>
-                {counts.criticalCount}
-              </div>
-              <p className="text-xs text-muted-foreground">Critical</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard icon="🏢" value={String(orgSet.size)} label="Organizations" />
+          <StatCard icon="📡" value={String(providers.length)} label="Providers" />
+          <StatCard icon="💬" value={String(totalChannels)} label="Channels" />
+          <StatCard icon="📤" value={totalUsed.toLocaleString()} label="Used" />
+          <StatCard icon="📥" value={totalRemaining.toLocaleString()} label="Remaining" />
+          <StatCard icon="🔥" value={String(criticalCount)} label="Critical" warn={criticalCount > 0} />
         </div>
       )}
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Providers</h3>
+      <div className="space-y-6">
         {loading ? (
           <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full" />
-            ))}
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
           </div>
         ) : providers.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
               No channels found.{' '}
-              {isSuperAdmin && (
-                <Link to="/setup" className="text-primary underline">Set up your first channel</Link>
-              )}
+              {isSuperAdmin && <Link to="/setup" className="text-primary underline">Set up your first channel</Link>}
             </CardContent>
           </Card>
         ) : (
-          providers.map((provider) => (
-            <Card key={provider.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">
-                      <Link to={`/providers/${provider.id}`} className="hover:underline">
-                        {provider.name}
-                      </Link>
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">{provider.organization.name}</p>
+          orgGroups.map((group) => {
+            const collapsed = collapsedOrgs.has(group.org.id)
+            return (
+              <div key={group.org.id}>
+                <button
+                  onClick={() => toggleOrg(group.org.id)}
+                  className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground mb-3 w-full text-left"
+                >
+                  <span className="text-xs">{collapsed ? '▶' : '▼'}</span>
+                  {group.org.name}
+                  <span className="font-normal text-xs">
+                    ({group.providers.length} providers)
+                  </span>
+                </button>
+
+                {!collapsed && (
+                  <div className="space-y-3 ml-4">
+                    {group.providers.map((provider) => {
+                      const showCompact = compact && !providerHasIssue(provider)
+                      return (
+                        <Card key={provider.id} className={showCompact ? 'opacity-70' : ''}>
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-sm font-medium">
+                                <Link to={`/providers/${provider.id}`} className="hover:underline">
+                                  {provider.name}
+                                </Link>
+                              </CardTitle>
+                              <Badge variant="outline" className="text-xs">{provider.channels.length}</Badge>
+                            </div>
+                          </CardHeader>
+                          {!showCompact && (
+                            <CardContent className="pt-0">
+                              <div className="space-y-1">
+                                {provider.channels.map((channel) => {
+                                  const status = getStatus(channel)
+                                  const pct = channel.latest_log
+                                    ? Math.round((channel.latest_log.quota_used / channel.quota_limit) * 100)
+                                    : 0
+                                  const barColor =
+                                    status === 'critical' ? 'bg-destructive'
+                                    : status === 'warning' ? 'bg-yellow-500'
+                                    : 'bg-primary/60'
+
+                                  return (
+                                    <Link
+                                      key={channel.id}
+                                      to={`/channels/${channel.id}`}
+                                      className="flex items-center gap-3 text-sm py-1 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
+                                    >
+                                      <span className="w-28 shrink-0 truncate">{channel.channel_name}</span>
+                                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full transition-all ${barColor}`}
+                                          style={{ width: `${Math.min(pct, 100)}%` }}
+                                        />
+                                      </div>
+                                      <span className="w-24 text-right font-mono text-xs shrink-0">
+                                        {channel.latest_log
+                                          ? `${channel.latest_log.quota_used.toLocaleString()}/${channel.quota_limit.toLocaleString()}`
+                                          : '- / -'}
+                                      </span>
+                                      <span className="w-10 shrink-0">{statusBadge(status)}</span>
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            </CardContent>
+                          )}
+                        </Card>
+                      )
+                    })}
                   </div>
-                  <Badge variant="outline">{provider.channels.length} channels</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {provider.channels.map((channel) => (
-                    <div key={channel.id} className="flex items-center justify-between text-sm">
-                      <Link
-                        to={`/channels/${channel.id}`}
-                        className="text-foreground hover:underline"
-                      >
-                        {channel.channel_name}
-                      </Link>
-                      <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground font-mono">
-                          {channel.latest_log ? `${channel.latest_log.quota_used.toLocaleString()}/${channel.quota_limit.toLocaleString()}` : '- / -'}
-                        </span>
-                        {statusBadge(getChannelStatus(channel))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                )}
+              </div>
+            )
+          })
         )}
       </div>
     </div>
