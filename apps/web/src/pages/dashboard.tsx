@@ -81,26 +81,28 @@ export function DashboardPage() {
       .select(`
         id, name,
         organization:organization_id (id, name),
-        channels (
-          id, channel_name, quota_limit,
-          latest_log:quota_logs(quota_used, quota_remaining),
-          latest_alert:alerts(level)
-        )
-      `)
-      .order('name')
+          channels (
+            id, channel_name, quota_limit,
+            latest_log:quota_logs(quota_used, quota_remaining, checked_at),
+            latest_alert:alerts(level)
+          )
+        `)
+        .order('name')
 
-    if (data) {
-      const mapped: ProviderRow[] = (data as any[]).map((p) => ({
-        id: p.id,
-        name: p.name,
-        organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
-        channels: (p.channels || []).map((c: any) => ({
-          id: c.id,
-          channel_name: c.channel_name,
-          quota_limit: c.quota_limit,
-          latest_log: c.latest_log?.[0] ?? null,
-          latest_alert: c.latest_alert?.[0] ?? null,
-        })),
+      if (data) {
+        const mapped: ProviderRow[] = (data as any[]).map((p) => ({
+          id: p.id,
+          name: p.name,
+          organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
+          channels: (p.channels || []).map((c: any) => ({
+            id: c.id,
+            channel_name: c.channel_name,
+            quota_limit: c.quota_limit,
+            latest_log: c.latest_log?.sort((a: any, b: any) =>
+              new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
+            )[0] ?? null,
+            latest_alert: c.latest_alert?.[0] ?? null,
+          })),
       }))
       setProviders(mapped)
     }

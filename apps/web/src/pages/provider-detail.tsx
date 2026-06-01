@@ -62,7 +62,9 @@ export function ProviderDetailPage() {
             channel_name: c.channel_name,
             channel_id: c.channel_id,
             quota_limit: c.quota_limit,
-            latest_log: c.latest_log?.[0] ?? null,
+            latest_log: c.latest_log?.sort((a: any, b: any) =>
+              new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
+            )[0] ?? null,
             latest_alert: c.latest_alert?.[0] ?? null,
           })),
         })

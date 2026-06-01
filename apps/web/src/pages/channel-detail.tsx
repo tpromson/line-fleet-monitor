@@ -83,7 +83,9 @@ export function ChannelDetailPage() {
           quota_limit: d.quota_limit,
           active: d.active,
           provider: Array.isArray(d.provider) ? d.provider[0] : d.provider,
-          latest_log: d.latest_log?.[0] ?? null,
+          latest_log: d.latest_log?.sort((a: any, b: any) =>
+            new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
+          )[0] ?? null,
           alerts: d.alerts ?? [],
         })
       }
