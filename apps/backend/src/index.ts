@@ -3,6 +3,8 @@ import cron from 'node-cron'
 import { collectAllQuotas } from './collector.js'
 import { checkAlerts } from './alert-engine.js'
 import { checkAllWebhooks } from './webhook-monitor.js'
+import { supabase } from './lib/supabase.js'
+import { testChannelWebhook } from './lib/line-api.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -20,6 +22,24 @@ app.post('/api/sync', async (_req, res) => {
   await collectAllQuotas()
   await checkAllWebhooks()
   await checkAlerts()
+})
+
+app.get('/api/channels/:id/webhook-test', async (req, res) => {
+  const { id } = req.params
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('access_token')
+    .eq('id', id)
+    .single()
+
+  if (!channel?.access_token) {
+    res.status(404).json({ error: 'Channel not found' })
+    return
+  }
+
+  const status = await testChannelWebhook(channel.access_token)
+  res.json({ status })
 })
 
 async function runCollection() {

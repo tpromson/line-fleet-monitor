@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -276,8 +277,9 @@ export function ChannelDetailPage() {
 
         <TabsContent value="webhook" className="mt-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle>Webhook Status</CardTitle>
+              <WebhookTestButton channelId={channel.id} />
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -298,7 +300,7 @@ export function ChannelDetailPage() {
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Last Checked</p>
+                  <p className="text-sm text-muted-foreground">Last Quota Check</p>
                   <p className="font-mono text-sm">
                     {channel.latest_log
                       ? new Date(channel.latest_log.checked_at).toLocaleString()
@@ -316,6 +318,39 @@ export function ChannelDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+function WebhookTestButton({ channelId }: { channelId: string }) {
+  const [testing, setTesting] = useState(false)
+  const [result, setResult] = useState<'online' | 'offline' | 'unknown' | null>(null)
+
+  const test = async () => {
+    setTesting(true)
+    setResult(null)
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL
+      const res = await fetch(`${backendUrl}/api/channels/${channelId}/webhook-test`)
+      const data = await res.json()
+      setResult(data.status)
+    } catch {
+      setResult('unknown')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {result && (
+        <Badge variant={result === 'online' ? 'default' : result === 'offline' ? 'destructive' : 'outline'}>
+          {result}
+        </Badge>
+      )}
+      <Button size="sm" variant="outline" onClick={test} disabled={testing}>
+        {testing ? 'Testing...' : 'Test Now'}
+      </Button>
     </div>
   )
 }
