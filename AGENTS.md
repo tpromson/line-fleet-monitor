@@ -10,7 +10,7 @@ Instructions for AI agents working on this codebase.
 - **Auth**: Supabase Auth (JWT via `@supabase/supabase-js`)
 - **Email**: Resend (alerts)
 - **Testing**: Vitest (both apps)
-- **Hosting**: Frontend on Vercel, backend on separate host (port 3001)
+- **Hosting**: Frontend on Vercel, backend on Railway (port 3001)
 
 ## Architecture
 
@@ -62,13 +62,14 @@ ALERT_EMAIL_FROM=
 ALERT_EMAIL_TO=
 PORT=3001
 CORS_ORIGIN=https://line-fleet-monitor-web.vercel.app
+# Backend URL: https://line-fleetbackend-production.up.railway.app
 ```
 
 ### Frontend (`apps/web/.env`)
 ```
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
-VITE_BACKEND_URL=
+VITE_BACKEND_URL=https://line-fleetbackend-production.up.railway.app
 ```
 
 ## Database
