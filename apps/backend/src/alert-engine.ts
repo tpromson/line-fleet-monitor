@@ -48,6 +48,7 @@ export async function checkAlerts() {
     const lastLevel = lastAlert?.level ?? null
 
     if (newLevel === lastLevel) continue
+    if (lastLevel === null && newLevel === 'normal') continue
 
     const message = buildMessage(channel.channel_name, latestLog.quota_used, channel.quota_limit, newLevel)
 
