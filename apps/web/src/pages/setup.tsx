@@ -367,8 +367,9 @@ function OrgMembersManager() {
         const data = await res.json()
         return data.email ?? userId.slice(0, 8) + '...'
       }
-    } catch {}
+    } catch { /* fall through to truncated ID below */ }
     return userId.slice(0, 8) + '...'
+  }
   }
 
   useEffect(() => {
