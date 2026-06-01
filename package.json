@@ -4,10 +4,6 @@
   "workspaces": [
     "apps/*"
   ],
-  "overrides": {
-    "react": "$react",
-    "react-dom": "$react-dom"
-  },
   "scripts": {
     "dev:web": "npm run dev -w apps/web",
     "dev:backend": "npm run dev --prefix apps/backend",
