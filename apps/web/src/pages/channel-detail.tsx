@@ -145,7 +145,7 @@ export function ChannelDetailPage() {
     switch (level) {
       case 'critical': return <Badge variant="destructive">Critical</Badge>
       case 'warning': return <Badge className="bg-yellow-500 text-white">Warning</Badge>
-      case 'normal': return <Badge variant="secondary">Recovery</Badge>
+      case 'recovery': return <Badge variant="secondary">Recovery</Badge>
       default: return null
     }
   }

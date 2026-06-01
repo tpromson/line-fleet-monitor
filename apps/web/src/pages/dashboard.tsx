@@ -130,20 +130,20 @@ export function DashboardPage() {
     const pct = (channel.latest_log.quota_used / channel.quota_limit) * 100
     if (pct >= 95) return 'critical'
     if (pct >= 80) return 'warning'
-    return 'normal'
+    return 'recovery'
   }
 
   const statusBadge = (status: string) => {
     switch (status) {
       case 'critical': return <Badge variant="destructive">Crit</Badge>
       case 'warning': return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Warn</Badge>
-      case 'normal': return <Badge variant="secondary">OK</Badge>
+      case 'recovery': return <Badge variant="secondary">OK</Badge>
       default: return <Badge variant="outline">-</Badge>
     }
   }
 
   const providerHasIssue = (pr: ProviderRow) =>
-    pr.channels.some((c) => getStatus(c) !== 'normal' && getStatus(c) !== 'no-data')
+    pr.channels.some((c) => getStatus(c) !== 'recovery' && getStatus(c) !== 'no-data')
 
   // Summary card helper
   const StatCard = ({ icon, value, label, warn }: { icon: string; value: string; label: string; warn?: boolean }) => (
