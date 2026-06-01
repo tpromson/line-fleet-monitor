@@ -370,10 +370,10 @@ function OrgMembersManager() {
     } catch { /* fall through to truncated ID below */ }
     return userId.slice(0, 8) + '...'
   }
-  }
 
   useEffect(() => {
     if (selectedOrg) loadMembers(selectedOrg)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrg])
 
   const addMember = async () => {
