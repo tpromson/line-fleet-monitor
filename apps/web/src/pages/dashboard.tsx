@@ -4,7 +4,9 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
+import { toast } from 'sonner'
 
 interface OrgCounts {
   orgs: number
@@ -71,41 +73,63 @@ export function DashboardPage() {
   const { isSuperAdmin } = useAuth()
   const [providers, setProviders] = useState<ProviderRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
 
-  useEffect(() => {
-    async function load() {
-      const { data } = await supabase
-        .from('providers')
-        .select(`
-          id, name,
-          organization:organization_id (id, name),
-          channels (
-            id, channel_name, quota_limit,
-            latest_log:quota_logs(quota_used, quota_remaining),
-            latest_alert:alerts(level)
-          )
-        `)
-        .order('name')
+  const loadDashboard = async () => {
+    const { data } = await supabase
+      .from('providers')
+      .select(`
+        id, name,
+        organization:organization_id (id, name),
+        channels (
+          id, channel_name, quota_limit,
+          latest_log:quota_logs(quota_used, quota_remaining),
+          latest_alert:alerts(level)
+        )
+      `)
+      .order('name')
 
-      if (data) {
-        const mapped: ProviderRow[] = (data as any[]).map((p) => ({
-          id: p.id,
-          name: p.name,
-          organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
-          channels: (p.channels || []).map((c: any) => ({
-            id: c.id,
-            channel_name: c.channel_name,
-            quota_limit: c.quota_limit,
-            latest_log: c.latest_log?.[0] ?? null,
-            latest_alert: c.latest_alert?.[0] ?? null,
-          })),
-        }))
-        setProviders(mapped)
-      }
-      setLoading(false)
+    if (data) {
+      const mapped: ProviderRow[] = (data as any[]).map((p) => ({
+        id: p.id,
+        name: p.name,
+        organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
+        channels: (p.channels || []).map((c: any) => ({
+          id: c.id,
+          channel_name: c.channel_name,
+          quota_limit: c.quota_limit,
+          latest_log: c.latest_log?.[0] ?? null,
+          latest_alert: c.latest_alert?.[0] ?? null,
+        })),
+      }))
+      setProviders(mapped)
     }
-    load()
-  }, [])
+    setLoading(false)
+  }
+
+  useEffect(() => { loadDashboard() }, [])
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL
+      if (!backendUrl) {
+        toast.error('Backend URL not configured')
+        return
+      }
+      const res = await fetch(`${backendUrl}/api/sync`, { method: 'POST' })
+      if (res.ok) {
+        toast.success('Sync started — refreshing data...')
+        setTimeout(() => loadDashboard(), 5000)
+      } else {
+        toast.error('Sync failed')
+      }
+    } catch {
+      toast.error('Cannot reach backend')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const counts = buildCounts(providers)
 
@@ -120,9 +144,14 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">Overview of all your LINE channels</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">Overview of all your LINE channels</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+          {syncing ? 'Syncing...' : 'Sync Now'}
+        </Button>
       </div>
 
       {loading ? (

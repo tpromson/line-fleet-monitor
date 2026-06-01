@@ -31,7 +31,7 @@ create table channels (
   channel_id text not null,
   channel_secret text not null,
   access_token text not null,
-  quota_limit integer not null default 500,
+  quota_limit integer not null default 300,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
