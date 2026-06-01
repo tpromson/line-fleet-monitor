@@ -42,6 +42,28 @@ app.get('/api/channels/:id/webhook-test', async (req, res) => {
   res.json({ status })
 })
 
+app.get('/api/users/lookup', async (req, res) => {
+  const email = req.query.email as string
+  if (!email) {
+    res.status(400).json({ error: 'email query param required' })
+    return
+  }
+
+  const { data, error } = await supabase.auth.admin.listUsers()
+  if (error) {
+    res.status(500).json({ error: error.message })
+    return
+  }
+
+  const user = data.users.find((u) => u.email === email)
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  res.json({ id: user.id, email: user.email })
+})
+
 async function runCollection() {
   await collectAllQuotas()
   await checkAllWebhooks()

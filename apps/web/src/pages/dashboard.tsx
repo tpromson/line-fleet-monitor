@@ -109,7 +109,11 @@ export function DashboardPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadDashboard() }, [])
+  useEffect(() => {
+    loadDashboard()
+    const interval = setInterval(loadDashboard, 300000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleSync = async () => {
     setSyncing(true)

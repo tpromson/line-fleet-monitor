@@ -67,6 +67,7 @@ export function SetupPage() {
           <TabsTrigger value="organizations">Organizations</TabsTrigger>
           <TabsTrigger value="providers">Providers</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>
+          <TabsTrigger value="members">Members</TabsTrigger>
         </TabsList>
 
         <TabsContent value="organizations" className="mt-4">
@@ -77,6 +78,9 @@ export function SetupPage() {
         </TabsContent>
         <TabsContent value="channels" className="mt-4">
           <ChannelManager />
+        </TabsContent>
+        <TabsContent value="members" className="mt-4">
+          <OrgMembersManager />
         </TabsContent>
       </Tabs>
     </div>
@@ -156,6 +160,11 @@ function ProviderManager() {
   const [orgId, setOrgId] = useState('')
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
+  const [editOpen, setEditOpen] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editOrgId, setEditOrgId] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editError, setEditError] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -186,13 +195,37 @@ function ProviderManager() {
     if (!name.trim() || !orgId) return
     setError('')
     const { error: err } = await supabase.from('providers').insert({ name: name.trim(), organization_id: orgId })
-    if (err) {
-      setError(err.message)
-      return
-    }
+    if (err) { setError(err.message); return }
     setName('')
     setOpen(false)
     setError('')
+    load()
+  }
+
+  const openEditDialog = (p: ProviderRow) => {
+    setEditingId(p.id)
+    setEditName(p.name)
+    setEditOrgId(p.organization.id)
+    setEditError('')
+    setEditOpen(true)
+  }
+
+  const saveEdit = async () => {
+    if (!editName.trim() || !editingId) return
+    setEditError('')
+    const { error: err } = await supabase.from('providers').update({
+      name: editName.trim(),
+      organization_id: editOrgId,
+    }).eq('id', editingId)
+    if (err) { setEditError(err.message); return }
+    setEditOpen(false)
+    setEditingId(null)
+    load()
+  }
+
+  const deleteProvider = async (id: string, name: string) => {
+    if (!confirm(`Delete "${name}"? This will also delete all channels under it.`)) return
+    await supabase.from('providers').delete().eq('id', id)
     load()
   }
 
@@ -200,6 +233,37 @@ function ProviderManager() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Providers</CardTitle>
+
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Provider</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="editp-name">Name</Label>
+                <Input id="editp-name" value={editName} onChange={(e: ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editp-org">Organization</Label>
+                <select
+                  id="editp-org"
+                  value={editOrgId}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setEditOrgId(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">Select...</option>
+                  {orgs.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <Button onClick={saveEdit} disabled={!editName.trim() || !editOrgId}>Save</Button>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger>
             <Button size="sm">Add Provider</Button>
@@ -246,9 +310,165 @@ function ProviderManager() {
                   <span className="text-sm font-medium">{p.name}</span>
                   <p className="text-xs text-muted-foreground">{p.organization.name}</p>
                 </div>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => openEditDialog(p)}>Edit</Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteProvider(p.id, p.name)}>Del</Button>
+                </div>
               </div>
             ))}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function OrgMembersManager() {
+  const [orgs, setOrgs] = useState<OrgRow[]>([])
+  const [selectedOrg, setSelectedOrg] = useState('')
+  const [members, setMembers] = useState<{ id: string; user_id: string; email: string; role: string }[]>([])
+  const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('viewer')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    supabase.from('organizations').select('id, name, created_at').order('name').then(({ data }) => {
+      if (data) setOrgs(data)
+    })
+  }, [])
+
+  const loadMembers = async (orgId: string) => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('organization_members')
+      .select('id, user_id, role')
+      .eq('organization_id', orgId)
+
+    if (data) {
+      const enriched = await Promise.all(
+        data.map(async (m) => {
+          const email = await fetchUserEmail(m.user_id)
+          return { ...m, email }
+        })
+      )
+      setMembers(enriched)
+    } else {
+      setMembers([])
+    }
+    setLoading(false)
+  }
+
+  const fetchUserEmail = async (userId: string): Promise<string> => {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL
+    if (!backendUrl) return userId.slice(0, 8) + '...'
+    try {
+      const res = await fetch(`${backendUrl}/api/users/lookup?id=${userId}`)
+      if (res.ok) {
+        const data = await res.json()
+        return data.email ?? userId.slice(0, 8) + '...'
+      }
+    } catch {}
+    return userId.slice(0, 8) + '...'
+  }
+
+  useEffect(() => {
+    if (selectedOrg) loadMembers(selectedOrg)
+  }, [selectedOrg])
+
+  const addMember = async () => {
+    if (!email.trim() || !selectedOrg) return
+    setError('')
+
+    const backendUrl = import.meta.env.VITE_BACKEND_URL
+    if (!backendUrl) { setError('Backend URL not configured'); return }
+      
+    try {
+      const res = await fetch(`${backendUrl}/api/users/lookup?email=${encodeURIComponent(email.trim())}`)
+      if (!res.ok) { setError('User not found'); return }
+      const user = await res.json()
+
+      const { error: err } = await supabase.from('organization_members').insert({
+        user_id: user.id,
+        organization_id: selectedOrg,
+        role,
+      })
+      if (err) { setError(err.message); return }
+
+      setEmail('')
+      loadMembers(selectedOrg)
+    } catch {
+      setError('Cannot reach backend')
+    }
+  }
+
+  const removeMember = async (id: string) => {
+    await supabase.from('organization_members').delete().eq('id', id)
+    loadMembers(selectedOrg)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Organization Members</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="member-org">Organization</Label>
+          <select
+            id="member-org"
+            value={selectedOrg}
+            onChange={(e) => setSelectedOrg(e.target.value)}
+            className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+          >
+            <option value="">Select...</option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {selectedOrg && (
+          <>
+            <div className="flex gap-2">
+              <Input
+                placeholder="user@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="flex-1"
+              />
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="border rounded-md px-2 py-1 text-sm bg-background"
+              >
+                <option value="viewer">Viewer</option>
+                <option value="admin">Admin</option>
+              </select>
+              <Button size="sm" onClick={addMember}>Add</Button>
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            {loading ? (
+              <Skeleton className="h-16 w-full" />
+            ) : members.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No members</p>
+            ) : (
+              <div className="space-y-1">
+                {members.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                    <div>
+                      <span className="text-sm">{m.email}</span>
+                      <Badge variant="outline" className="ml-2 text-xs">{m.role}</Badge>
+                    </div>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeMember(m.id)}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -352,6 +572,12 @@ function ChannelManager() {
 
   const toggleActive = async (id: string, active: boolean) => {
     await supabase.from('channels').update({ active: !active }).eq('id', id)
+    load()
+  }
+
+  const deleteChannel = async (id: string, name: string) => {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+    await supabase.from('channels').delete().eq('id', id)
     load()
   }
 
@@ -487,6 +713,9 @@ function ChannelManager() {
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => toggleActive(c.id, c.active)}>
                     {c.active ? 'Pause' : 'Activate'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteChannel(c.id, c.channel_name)}>
+                    Del
                   </Button>
                 </div>
               </div>
