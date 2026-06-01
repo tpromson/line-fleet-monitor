@@ -260,7 +260,11 @@ function ChannelManager() {
   const [providers, setProviders] = useState<ProviderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<ChannelForm>(emptyForm)
+  const [editError, setEditError] = useState('')
+  const [createError, setCreateError] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -297,16 +301,52 @@ function ChannelManager() {
 
   const create = async () => {
     if (!form.channel_name.trim() || !form.channel_secret.trim() || !form.access_token.trim() || !form.provider_id) return
-    await supabase.from('channels').insert({
+    setCreateError('')
+    const { error: err } = await supabase.from('channels').insert({
       provider_id: form.provider_id,
       channel_name: form.channel_name.trim(),
       channel_id: form.channel_id.trim(),
       channel_secret: form.channel_secret.trim(),
       access_token: form.access_token.trim(),
-      quota_limit: parseInt(form.quota_limit) || 500,
+      quota_limit: parseInt(form.quota_limit) || 300,
     })
+    if (err) { setCreateError(err.message); return }
     setForm(emptyForm)
     setOpen(false)
+    setCreateError('')
+    load()
+  }
+
+  const openEdit = (c: ChannelRow) => {
+    setEditingId(c.id)
+    setForm({
+      provider_id: c.provider.id,
+      channel_name: c.channel_name,
+      channel_id: c.channel_id,
+      channel_secret: '',
+      access_token: '',
+      quota_limit: String(c.quota_limit),
+    })
+    setEditError('')
+    setEditOpen(true)
+  }
+
+  const saveEdit = async () => {
+    if (!form.channel_name.trim() || !editingId) return
+    setEditError('')
+    const updateData: any = {
+      provider_id: form.provider_id,
+      channel_name: form.channel_name.trim(),
+      channel_id: form.channel_id.trim(),
+      quota_limit: parseInt(form.quota_limit) || 300,
+    }
+    if (form.channel_secret.trim()) updateData.channel_secret = form.channel_secret.trim()
+    if (form.access_token.trim()) updateData.access_token = form.access_token.trim()
+
+    const { error: err } = await supabase.from('channels').update(updateData).eq('id', editingId)
+    if (err) { setEditError(err.message); return }
+    setEditOpen(false)
+    setEditingId(null)
     load()
   }
 
@@ -323,6 +363,55 @@ function ChannelManager() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Channels</CardTitle>
+
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Channel</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2">
+                <Label htmlFor="edit-prov">Provider</Label>
+                <select
+                  id="edit-prov"
+                  value={form.provider_id}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setForm({ ...form, provider_id: e.target.value })}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">Select...</option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.organization.name})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Channel Name</Label>
+                <Input id="edit-name" value={form.channel_name} onChange={updateField('channel_name')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-ch-id">Channel ID</Label>
+                <Input id="edit-ch-id" value={form.channel_id} onChange={updateField('channel_id')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-secret">Channel Secret</Label>
+                <Input id="edit-secret" type="password" value={form.channel_secret} onChange={updateField('channel_secret')} placeholder="Leave blank to keep current" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-token">Access Token</Label>
+                <Input id="edit-token" type="password" value={form.access_token} onChange={updateField('access_token')} placeholder="Leave blank to keep current" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-limit">Quota Limit</Label>
+                <Input id="edit-limit" type="number" value={form.quota_limit} onChange={updateField('quota_limit')} />
+              </div>
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <Button onClick={saveEdit} disabled={!form.channel_name || !form.provider_id}>
+              Save Changes
+            </Button>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger>
             <Button size="sm">Add Channel</Button>
@@ -367,6 +456,7 @@ function ChannelManager() {
                 <Input id="ch-limit" type="number" value={form.quota_limit} onChange={updateField('quota_limit')} />
               </div>
             </div>
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
             <Button onClick={create} disabled={!form.channel_name || !form.access_token || !form.provider_id}>
               Create
             </Button>
@@ -392,6 +482,9 @@ function ChannelManager() {
                   <Badge variant={c.active ? 'default' : 'outline'}>
                     {c.active ? 'Active' : 'Paused'}
                   </Badge>
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(c)}>
+                    Edit
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => toggleActive(c.id, c.active)}>
                     {c.active ? 'Pause' : 'Activate'}
                   </Button>
