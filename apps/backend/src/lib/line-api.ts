@@ -7,7 +7,7 @@ interface QuotaResponse {
 
 export async function fetchChannelQuota(accessToken: string, quotaLimit: number): Promise<QuotaResponse> {
   try {
-    const res = await fetch('https://api.line.me/v2/bot/message/quota', {
+    const res = await fetch('https://api.line.me/v2/bot/message/quota/consumption', {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
 
@@ -18,7 +18,7 @@ export async function fetchChannelQuota(accessToken: string, quotaLimit: number)
     }
 
     const data = await res.json()
-    const used = data.totalUsage ?? data.value ?? 0
+    const used = data.totalUsage ?? 0
     const remaining = quotaLimit - used
 
     return { used, remaining, limit: quotaLimit }
