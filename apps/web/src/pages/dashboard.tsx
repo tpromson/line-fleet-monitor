@@ -173,9 +173,11 @@ export function DashboardPage() {
           <Button variant="ghost" size="sm" onClick={() => setCompact(!compact)}>
             {compact ? 'Expand All' : 'Compact'}
           </Button>
-          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-            {syncing ? 'Syncing...' : 'Sync Now'}
-          </Button>
+          {isSuperAdmin && (
+            <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+              {syncing ? 'Syncing...' : 'Sync Now'}
+            </Button>
+          )}
         </div>
       </div>
 
