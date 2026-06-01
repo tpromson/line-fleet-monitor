@@ -11,7 +11,9 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "declaration": true
+    "declaration": true,
+    "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
 }

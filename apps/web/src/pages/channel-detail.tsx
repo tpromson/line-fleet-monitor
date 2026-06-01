@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { fetchBackend } from '@/lib/backend-api'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface AlertRow {
@@ -21,6 +22,8 @@ interface ChannelDetail {
   channel_id: string
   quota_limit: number
   active: boolean
+  webhook_status: 'online' | 'offline' | 'unknown'
+  webhook_checked_at: string | null
   provider: { id: string; name: string }
   latest_log: { quota_used: number; quota_remaining: number; checked_at: string; error: string | null } | null
   alerts: AlertRow[]
@@ -66,7 +69,7 @@ export function ChannelDetailPage() {
       const { data } = await supabase
         .from('channels')
         .select(`
-          id, channel_name, channel_id, quota_limit, active,
+          id, channel_name, channel_id, quota_limit, active, webhook_status, webhook_checked_at,
           provider:provider_id (id, name),
           latest_log:quota_logs(quota_used, quota_remaining, checked_at, error),
           alerts(id, level, message, created_at)
@@ -82,6 +85,8 @@ export function ChannelDetailPage() {
           channel_id: d.channel_id,
           quota_limit: d.quota_limit,
           active: d.active,
+          webhook_status: d.webhook_status ?? 'unknown',
+          webhook_checked_at: d.webhook_checked_at ?? null,
           provider: Array.isArray(d.provider) ? d.provider[0] : d.provider,
           latest_log: d.latest_log?.sort((a: any, b: any) =>
             new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
@@ -287,19 +292,27 @@ export function ChannelDetailPage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-3 h-3 rounded-full ${
-                    channel.latest_log?.error === 'UNAUTHORIZED'
+                    channel.webhook_status === 'online'
+                      ? 'bg-green-500'
+                      : channel.webhook_status === 'offline'
                       ? 'bg-red-500'
-                      : channel.latest_log?.error
-                        ? 'bg-yellow-500'
-                        : 'bg-green-500'
+                      : 'bg-yellow-500'
                   }`} />
                   <span className="font-medium">
-                    {channel.latest_log?.error === 'UNAUTHORIZED'
-                      ? 'Token Expired'
-                      : channel.latest_log?.error
-                        ? 'Connection Issue'
-                        : 'Connected'}
+                    {channel.webhook_status === 'online'
+                      ? 'Online'
+                      : channel.webhook_status === 'offline'
+                        ? 'Offline'
+                        : 'Unknown'}
                   </span>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Last Webhook Check</p>
+                  <p className="font-mono text-sm">
+                    {channel.webhook_checked_at
+                      ? new Date(channel.webhook_checked_at).toLocaleString()
+                      : 'Never'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Last Quota Check</p>
@@ -332,8 +345,7 @@ function WebhookTestButton({ channelId }: { channelId: string }) {
     setTesting(true)
     setResult(null)
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL
-      const res = await fetch(`${backendUrl}/api/channels/${channelId}/webhook-test`)
+      const res = await fetchBackend(`/api/channels/${channelId}/webhook-test`)
       const data = await res.json()
       setResult(data.status)
     } catch {

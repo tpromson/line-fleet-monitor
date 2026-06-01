@@ -63,15 +63,15 @@ describe('alert-engine', () => {
     expect(mockSendEmail).not.toHaveBeenCalled()
   })
 
-  it('fires normal alert when usage drops below 80% from warning', async () => {
+  it('fires recovery alert when usage drops below 80% from warning', async () => {
     const insertSpy = vi.fn().mockResolvedValue({})
     mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: 500 }], { level: 'warning' }, insertSpy))
     await checkAlerts()
     expect(mockSendEmail).toHaveBeenCalled()
-    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ level: 'normal' }))
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ level: 'recovery' }))
   })
 
-  it('does not fire normal alert when no prior alert exists', async () => {
+  it('does not fire recovery alert when no prior alert exists', async () => {
     mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: 500 }], null))
     await checkAlerts()
     expect(mockSendEmail).not.toHaveBeenCalled()

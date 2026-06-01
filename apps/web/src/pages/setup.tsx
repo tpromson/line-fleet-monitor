@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { fetchBackend } from '@/lib/backend-api'
 import {
   Dialog,
   DialogContent,
@@ -360,10 +361,8 @@ function OrgMembersManager() {
   }
 
   const fetchUserEmail = async (userId: string): Promise<string> => {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL
-    if (!backendUrl) return userId.slice(0, 8) + '...'
     try {
-      const res = await fetch(`${backendUrl}/api/users/lookup?id=${userId}`)
+      const res = await fetchBackend(`/api/users/lookup?id=${userId}`)
       if (res.ok) {
         const data = await res.json()
         return data.email ?? userId.slice(0, 8) + '...'
@@ -380,11 +379,8 @@ function OrgMembersManager() {
     if (!email.trim() || !selectedOrg) return
     setError('')
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL
-    if (!backendUrl) { setError('Backend URL not configured'); return }
-      
     try {
-      const res = await fetch(`${backendUrl}/api/users/lookup?email=${encodeURIComponent(email.trim())}`)
+      const res = await fetchBackend(`/api/users/lookup?email=${encodeURIComponent(email.trim())}`)
       if (!res.ok) { setError('User not found'); return }
       const user = await res.json()
 

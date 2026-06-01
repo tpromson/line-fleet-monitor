@@ -1,15 +1,6 @@
 import { supabase } from './lib/supabase.js'
 import { sendAlertEmail } from './lib/email.js'
 
-interface ChannelAlertState {
-  channel_id: string
-  channel_name: string
-  quota_used: number
-  quota_limit: number
-  usage_pct: number
-  last_alert_level: string | null
-}
-
 const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO?.split(',').map((e) => e.trim()) ?? []
 
 export async function checkAlerts() {
@@ -48,7 +39,7 @@ export async function checkAlerts() {
     const lastLevel = lastAlert?.level ?? null
 
     if (newLevel === lastLevel) continue
-    if (lastLevel === null && newLevel === 'normal') continue
+    if (lastLevel === null && newLevel === 'recovery') continue
 
     const message = buildMessage(channel.channel_name, latestLog.quota_used, channel.quota_limit, newLevel)
 
@@ -66,15 +57,15 @@ export async function checkAlerts() {
   console.log('[alert] Check complete')
 }
 
-function determineLevel(usagePct: number): 'normal' | 'warning' | 'critical' {
+function determineLevel(usagePct: number): 'recovery' | 'warning' | 'critical' {
   if (usagePct >= 95) return 'critical'
   if (usagePct >= 80) return 'warning'
-  return 'normal'
+  return 'recovery'
 }
 
 function buildMessage(name: string, used: number, limit: number, level: string): string {
   const remaining = limit - used
-  if (level === 'normal') {
+  if (level === 'recovery') {
     return `✅ ${name} — Quota back to normal (${used}/${limit}, ${remaining} remaining)`
   }
   const emoji = level === 'critical' ? '🔴' : '⚠️'

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
+import { fetchBackend } from '@/lib/backend-api'
 import { toast } from 'sonner'
 
 interface ChannelSummary {
@@ -84,13 +85,11 @@ export function DashboardPage() {
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL
-      if (!backendUrl) { toast.error('Backend URL not configured'); return }
-      await fetch(`${backendUrl}/api/sync`, { method: 'POST' })
+      await fetchBackend('/api/sync', { method: 'POST' })
       toast.success('Sync started — refreshing...')
       setTimeout(() => loadDashboard(), 5000)
-    } catch {
-      toast.error('Cannot reach backend')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Cannot reach backend')
     } finally { setSyncing(false) }
   }
 
