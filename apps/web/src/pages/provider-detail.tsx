@@ -4,9 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { toast } from 'sonner'
-import { AlertCircle, Hash, TrendingUp, Gauge, Activity } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 
 interface ChannelItem {
   id: string

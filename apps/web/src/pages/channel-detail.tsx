@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchBackend } from '@/lib/backend-api'
-import { toast } from 'sonner'
-import { AlertCircle, Zap, TrendingUp, Bell, Wifi, Activity } from 'lucide-react'
+import { AlertCircle, TrendingUp, Bell, Activity } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface AlertRow {
@@ -63,14 +62,12 @@ export function ChannelDetailPage() {
   const [channel, setChannel] = useState<ChannelDetail | null>(null)
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       if (!id) return
 
       try {
-        setError(null)
         const { data, error: fetchError } = await supabase
           .from('channels')
         .select(`
@@ -124,7 +121,6 @@ export function ChannelDetailPage() {
 
       setLoading(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load channel')
       setLoading(false)
     }
     }

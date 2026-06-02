@@ -120,7 +120,7 @@ function OrgManager() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Organizations</CardTitle>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger>
             <Button size="sm">Add Organization</Button>
           </DialogTrigger>
           <DialogContent>
@@ -273,7 +273,7 @@ function ProviderManager() {
         </Dialog>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger>
             <Button size="sm">Add Provider</Button>
           </DialogTrigger>
           <DialogContent>
@@ -651,7 +651,7 @@ function ChannelManager() {
         </Dialog>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger>
             <Button size="sm">Add Channel</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
