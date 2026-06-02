@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { fetchBackend } from '@/lib/backend-api'
 import { toast } from 'sonner'
+import { Building2, Radio, MessageSquare, ArrowUpFromLine, ArrowDownToLine, Flame, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface ChannelSummary {
   id: string
@@ -33,6 +34,7 @@ export function DashboardPage() {
   const { isSuperAdmin } = useAuth()
   const [providers, setProviders] = useState<ProviderRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [compact, setCompact] = useState(true)
   const [collapsedOrgs, setCollapsedOrgs] = useState<Set<string>>(new Set())
@@ -44,36 +46,44 @@ export function DashboardPage() {
     .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0]
 
   const loadDashboard = async () => {
-    const { data } = await supabase
-      .from('providers')
-      .select(`
-        id, name,
-        organization:organization_id (id, name),
-        channels (
-          id, channel_name, quota_limit,
-          latest_log:quota_logs(quota_used, quota_remaining, checked_at),
-          latest_alert:alerts(level)
-        )
-      `)
-      .order('name')
+    try {
+      setError(null)
+      const { data, error: fetchError } = await supabase
+        .from('providers')
+        .select(`
+          id, name,
+          organization:organization_id (id, name),
+          channels (
+            id, channel_name, quota_limit,
+            latest_log:quota_logs(quota_used, quota_remaining, checked_at),
+            latest_alert:alerts(level)
+          )
+        `)
+        .order('name')
 
-    if (data) {
-      setProviders((data as any[]).map((p) => ({
-        id: p.id,
-        name: p.name,
-        organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
-        channels: (p.channels || []).map((c: any) => ({
-          id: c.id,
-          channel_name: c.channel_name,
-          quota_limit: c.quota_limit,
-          latest_log: c.latest_log?.sort((a: any, b: any) =>
-            new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
-          )[0] ?? null,
-          latest_alert: c.latest_alert?.[0] ?? null,
-        })),
-      })))
+      if (fetchError) throw new Error(fetchError.message)
+
+      if (data) {
+        setProviders((data as any[]).map((p) => ({
+          id: p.id,
+          name: p.name,
+          organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
+          channels: (p.channels || []).map((c: any) => ({
+            id: c.id,
+            channel_name: c.channel_name,
+            quota_limit: c.quota_limit,
+            latest_log: c.latest_log?.sort((a: any, b: any) =>
+              new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
+            )[0] ?? null,
+            latest_alert: c.latest_alert?.[0] ?? null,
+          })),
+        })))
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -146,11 +156,11 @@ export function DashboardPage() {
     pr.channels.some((c) => getStatus(c) !== 'recovery' && getStatus(c) !== 'no-data')
 
   // Summary card helper
-  const StatCard = ({ icon, value, label, warn }: { icon: string; value: string; label: string; warn?: boolean }) => (
+  const StatCard = ({ icon, value, label, warn }: { icon: React.ReactNode; value: string; label: string; warn?: boolean }) => (
     <Card className={warn ? 'border-destructive' : ''}>
       <CardContent className="pt-4 pb-3">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-lg">{icon}</span>
+          <span className="text-muted-foreground">{icon}</span>
           <span className={`text-xl font-bold ${warn ? 'text-destructive' : ''}`}>{value}</span>
         </div>
         <p className="text-xs text-muted-foreground">{label}</p>
@@ -182,19 +192,27 @@ export function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i}><CardContent className="pt-6"><Skeleton className="h-8 w-full" /></CardContent></Card>
+            <Card key={i}><CardContent className="pt-4 pb-3"><Skeleton className="h-12 w-full" /></CardContent></Card>
           ))}
         </div>
+      ) : error ? (
+        <Card className="border-destructive">
+          <CardContent className="py-6 text-center">
+            <p className="text-destructive font-medium">Failed to load dashboard</p>
+            <p className="text-sm text-muted-foreground mt-1">{error}</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={loadDashboard}>Retry</Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard icon="🏢" value={String(orgSet.size)} label="Organizations" />
-          <StatCard icon="📡" value={String(providers.length)} label="Providers" />
-          <StatCard icon="💬" value={String(totalChannels)} label="Channels" />
-          <StatCard icon="📤" value={totalUsed.toLocaleString()} label="Used" />
-          <StatCard icon="📥" value={totalRemaining.toLocaleString()} label="Remaining" />
-          <StatCard icon="🔥" value={String(criticalCount)} label="Critical" warn={criticalCount > 0} />
+          <StatCard icon={<Building2 className="w-4 h-4" />} value={String(orgSet.size)} label="Organizations" />
+          <StatCard icon={<Radio className="w-4 h-4" />} value={String(providers.length)} label="Providers" />
+          <StatCard icon={<MessageSquare className="w-4 h-4" />} value={String(totalChannels)} label="Channels" />
+          <StatCard icon={<ArrowUpFromLine className="w-4 h-4" />} value={totalUsed.toLocaleString()} label="Used" />
+          <StatCard icon={<ArrowDownToLine className="w-4 h-4" />} value={totalRemaining.toLocaleString()} label="Remaining" />
+          <StatCard icon={<Flame className="w-4 h-4" />} value={String(criticalCount)} label="Critical" warn={criticalCount > 0} />
         </div>
       )}
 
@@ -217,11 +235,16 @@ export function DashboardPage() {
               <div key={group.org.id}>
                 <button
                   onClick={() => toggleOrg(group.org.id)}
-                  className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground mb-3 w-full text-left"
+                  aria-expanded={!collapsed}
+                  aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${group.org.name}`}
+                  className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground mb-3 w-full text-left focus-visible:outline-2 focus-visible:outline-primary rounded"
                 >
-                  <span className="text-xs">{collapsed ? '▶' : '▼'}</span>
-                  {group.org.name}
-                  <span className="font-normal text-xs">
+                  {collapsed
+                    ? <ChevronRight className="w-4 h-4 shrink-0" />
+                    : <ChevronDown className="w-4 h-4 shrink-0" />
+                  }
+                  <span className="truncate">{group.org.name}</span>
+                  <span className="font-normal text-xs shrink-0">
                     ({group.providers.length} providers)
                   </span>
                 </button>

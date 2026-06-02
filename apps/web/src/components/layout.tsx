@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
+import { Sun, Moon } from 'lucide-react'
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { isSuperAdmin } = useAuth()
@@ -22,6 +23,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [dark])
 
   const handleLogout = async () => {
+    if (!confirm('Are you sure you want to log out?')) return
     await supabase.auth.signOut()
     navigate('/login')
   }
@@ -33,6 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded">Skip to content</a>
       <header className="border-b">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-6">
@@ -44,7 +47,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   to={item.href}
-                  className={`text-sm transition-colors ${
+                  className={`text-sm transition-colors focus-visible:outline-2 focus-visible:outline-primary rounded ${
                     location.pathname.startsWith(item.href)
                       ? 'text-foreground font-medium'
                       : 'text-muted-foreground hover:text-foreground'
@@ -56,8 +59,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setDark(!dark)}>
-              {dark ? '☀' : '☾'}
+            <Button variant="ghost" size="sm" onClick={() => setDark(!dark)} aria-label="Toggle theme">
+              {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               Logout
@@ -65,7 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="container mx-auto px-4 py-6">{children}</main>
+      <main className="container mx-auto px-4 py-6" id="main-content">{children}</main>
     </div>
   )
 }

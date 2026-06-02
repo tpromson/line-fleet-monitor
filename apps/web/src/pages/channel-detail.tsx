@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchBackend } from '@/lib/backend-api'
+import { toast } from 'sonner'
+import { AlertCircle, Zap, TrendingUp, Bell, Wifi, Activity } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface AlertRow {
@@ -61,13 +63,16 @@ export function ChannelDetailPage() {
   const [channel, setChannel] = useState<ChannelDetail | null>(null)
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       if (!id) return
 
-      const { data } = await supabase
-        .from('channels')
+      try {
+        setError(null)
+        const { data, error: fetchError } = await supabase
+          .from('channels')
         .select(`
           id, channel_name, channel_id, quota_limit, active, webhook_status, webhook_checked_at,
           provider:provider_id (id, name),
@@ -75,10 +80,12 @@ export function ChannelDetailPage() {
           alerts(id, level, message, created_at)
         `)
         .eq('id', id)
-        .single()
+          .single()
 
-      if (data) {
-        const d = data as any
+        if (fetchError) throw new Error(fetchError.message)
+
+        if (data) {
+          const d = data as any
         setChannel({
           id: d.id,
           channel_name: d.channel_name,
@@ -116,6 +123,10 @@ export function ChannelDetailPage() {
       }
 
       setLoading(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load channel')
+      setLoading(false)
+    }
     }
     load()
   }, [id])
@@ -130,7 +141,13 @@ export function ChannelDetailPage() {
   }
 
   if (!channel) {
-    return <div className="text-center py-12 text-muted-foreground">Channel not found</div>
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+        <p className="text-muted-foreground">Channel not found</p>
+        <Link to="/dashboard" className="text-sm text-primary hover:underline mt-2 inline-block">&larr; Back to Dashboard</Link>
+      </div>
+    )
   }
 
   const forecast = channel.latest_log
@@ -157,7 +174,7 @@ export function ChannelDetailPage() {
           &larr; {channel.provider.name}
         </Link>
         <h2 className="text-2xl font-bold tracking-tight mt-1">{channel.channel_name}</h2>
-        <p className="text-muted-foreground font-mono text-sm">{channel.channel_id}</p>
+        <p className="text-muted-foreground font-mono text-sm truncate">{channel.channel_id}</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -208,7 +225,10 @@ export function ChannelDetailPage() {
             </CardHeader>
             <CardContent>
               {dailyLogs.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No data yet. Collector will start populating after first run.</p>
+                <div className="text-center py-8">
+                  <Activity className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-muted-foreground">No data yet. Collector will start populating after first run.</p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={dailyLogs}>
@@ -245,11 +265,14 @@ export function ChannelDetailPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8">
+                  <TrendingUp className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-muted-foreground">
                   {channel.latest_log && channel.latest_log.quota_used === 0
                     ? 'Not enough data (current usage is 0). Data will build throughout the month.'
                     : 'No data available yet.'}
                 </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -262,14 +285,17 @@ export function ChannelDetailPage() {
             </CardHeader>
             <CardContent>
               {channel.alerts.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No alerts yet</p>
+                <div className="text-center py-8">
+                  <Bell className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-muted-foreground">No alerts yet</p>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {channel.alerts.map((alert) => (
                     <div key={alert.id} className="flex items-center justify-between py-2 border-b last:border-0">
                       <div>
                         {alertBadge(alert.level)}
-                        <span className="ml-2 text-sm">{alert.message}</span>
+                        <span className="ml-2 text-sm truncate">{alert.message}</span>
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {new Date(alert.created_at).toLocaleString()}
@@ -291,7 +317,10 @@ export function ChannelDetailPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${
+                  <div
+                    role="status"
+                    aria-label={`Webhook status: ${channel.webhook_status === 'online' ? 'Online' : channel.webhook_status === 'offline' ? 'Offline' : 'Unknown'}`}
+                    className={`w-3 h-3 rounded-full ${
                     channel.webhook_status === 'online'
                       ? 'bg-green-500'
                       : channel.webhook_status === 'offline'
@@ -359,7 +388,7 @@ function WebhookTestButton({ channelId }: { channelId: string }) {
     <div className="flex items-center gap-2">
       {result && (
         <Badge variant={result === 'online' ? 'default' : result === 'offline' ? 'destructive' : 'outline'}>
-          {result}
+          {result === 'online' ? 'Online' : result === 'offline' ? 'Offline' : 'Unknown'}
         </Badge>
       )}
       <Button size="sm" variant="outline" onClick={test} disabled={testing}>

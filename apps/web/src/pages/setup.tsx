@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { fetchBackend } from '@/lib/backend-api'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -93,6 +94,7 @@ function OrgManager() {
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -105,9 +107,11 @@ function OrgManager() {
 
   const create = async () => {
     if (!name.trim()) return
+    setSaving(true)
     await supabase.from('organizations').insert({ name: name.trim() })
     setName('')
     setOpen(false)
+    setSaving(false)
     load()
   }
 
@@ -116,7 +120,7 @@ function OrgManager() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Organizations</CardTitle>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger>
+          <DialogTrigger asChild>
             <Button size="sm">Add Organization</Button>
           </DialogTrigger>
           <DialogContent>
@@ -127,7 +131,7 @@ function OrgManager() {
               <Label htmlFor="org-name">Name</Label>
               <Input id="org-name" value={name} onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)} placeholder="My Organization" />
             </div>
-            <Button onClick={create} disabled={!name.trim()}>Create</Button>
+            <Button onClick={create} disabled={!name.trim() || saving}>{saving ? 'Creating...' : 'Create'}</Button>
           </DialogContent>
         </Dialog>
       </CardHeader>
@@ -166,6 +170,7 @@ function ProviderManager() {
   const [editOrgId, setEditOrgId] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editError, setEditError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -174,8 +179,8 @@ function ProviderManager() {
       supabase.from('organizations').select('id, name, created_at').order('name'),
     ])
 
-    if (provsRes.error) console.error('providers fetch error:', provsRes.error)
-    if (orgsRes.error) console.error('orgs fetch error:', orgsRes.error)
+    if (provsRes.error) toast.error(provsRes.error.message)
+    if (orgsRes.error) toast.error(orgsRes.error.message)
 
     if (provsRes.data) {
       setProviders(
@@ -194,12 +199,14 @@ function ProviderManager() {
 
   const create = async () => {
     if (!name.trim() || !orgId) return
+    setSaving(true)
     setError('')
     const { error: err } = await supabase.from('providers').insert({ name: name.trim(), organization_id: orgId })
-    if (err) { setError(err.message); return }
+    if (err) { setError(err.message); setSaving(false); return }
     setName('')
     setOpen(false)
     setError('')
+    setSaving(false)
     load()
   }
 
@@ -266,7 +273,7 @@ function ProviderManager() {
         </Dialog>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger>
+          <DialogTrigger asChild>
             <Button size="sm">Add Provider</Button>
           </DialogTrigger>
           <DialogContent>
@@ -294,7 +301,7 @@ function ProviderManager() {
               </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button onClick={create} disabled={!name.trim() || !orgId}>Create</Button>
+            <Button onClick={create} disabled={!name.trim() || !orgId || saving}>{saving ? 'Creating...' : 'Create'}</Button>
           </DialogContent>
         </Dialog>
       </CardHeader>
@@ -332,6 +339,7 @@ function OrgMembersManager() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('viewer')
   const [error, setError] = useState('')
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     supabase.from('organizations').select('id, name, created_at').order('name').then(({ data }) => {
@@ -379,10 +387,11 @@ function OrgMembersManager() {
   const addMember = async () => {
     if (!email.trim() || !selectedOrg) return
     setError('')
+    setAdding(true)
 
     try {
       const res = await fetchBackend(`/api/users/lookup?email=${encodeURIComponent(email.trim())}`)
-      if (!res.ok) { setError('User not found'); return }
+      if (!res.ok) { setError('User not found'); setAdding(false); return }
       const user = await res.json()
 
       const { error: err } = await supabase.from('organization_members').insert({
@@ -390,16 +399,19 @@ function OrgMembersManager() {
         organization_id: selectedOrg,
         role,
       })
-      if (err) { setError(err.message); return }
+      if (err) { setError(err.message); setAdding(false); return }
 
       setEmail('')
+      setAdding(false)
       loadMembers(selectedOrg)
     } catch {
       setError('Cannot reach backend')
+      setAdding(false)
     }
   }
 
   const removeMember = async (id: string) => {
+    if (!confirm('Remove this member?')) return
     await supabase.from('organization_members').delete().eq('id', id)
     loadMembers(selectedOrg)
   }
@@ -442,7 +454,7 @@ function OrgMembersManager() {
                 <option value="viewer">Viewer</option>
                 <option value="admin">Admin</option>
               </select>
-              <Button size="sm" onClick={addMember}>Add</Button>
+              <Button size="sm" onClick={addMember} disabled={adding}>{adding ? 'Adding...' : 'Add'}</Button>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -482,6 +494,7 @@ function ChannelManager() {
   const [form, setForm] = useState<ChannelForm>(emptyForm)
   const [editError, setEditError] = useState('')
   const [createError, setCreateError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -519,6 +532,7 @@ function ChannelManager() {
   const create = async () => {
     if (!form.channel_name.trim() || !form.channel_secret.trim() || !form.access_token.trim() || !form.provider_id) return
     setCreateError('')
+    setSaving(true)
     const { error: err } = await supabase.from('channels').insert({
       provider_id: form.provider_id,
       channel_name: form.channel_name.trim(),
@@ -527,10 +541,11 @@ function ChannelManager() {
       access_token: form.access_token.trim(),
       quota_limit: parseInt(form.quota_limit) || 300,
     })
-    if (err) { setCreateError(err.message); return }
+    if (err) { setCreateError(err.message); setSaving(false); return }
     setForm(emptyForm)
     setOpen(false)
     setCreateError('')
+    setSaving(false)
     load()
   }
 
@@ -636,7 +651,7 @@ function ChannelManager() {
         </Dialog>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger>
+          <DialogTrigger asChild>
             <Button size="sm">Add Channel</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
@@ -680,8 +695,8 @@ function ChannelManager() {
               </div>
             </div>
             {createError && <p className="text-sm text-destructive">{createError}</p>}
-            <Button onClick={create} disabled={!form.channel_name || !form.access_token || !form.provider_id}>
-              Create
+            <Button onClick={create} disabled={!form.channel_name || !form.access_token || !form.provider_id || saving}>
+              {saving ? 'Creating...' : 'Create'}
             </Button>
           </DialogContent>
         </Dialog>

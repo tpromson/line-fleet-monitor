@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
+import { AlertCircle, Hash, TrendingUp, Gauge, Activity } from 'lucide-react'
 
 interface ChannelItem {
   id: string
@@ -34,42 +37,51 @@ export function ProviderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [provider, setProvider] = useState<ProviderDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from('providers')
-        .select(`
-          id, name,
-          organization:organization_id (id, name),
-          channels (
-            id, channel_name, channel_id, quota_limit,
-            latest_log:quota_logs(quota_used, quota_remaining, checked_at, error),
-            latest_alert:alerts(level)
-          )
-        `)
-        .eq('id', id)
-        .single()
+      try {
+        setError(null)
+        const { data, error: fetchError } = await supabase
+          .from('providers')
+          .select(`
+            id, name,
+            organization:organization_id (id, name),
+            channels (
+              id, channel_name, channel_id, quota_limit,
+              latest_log:quota_logs(quota_used, quota_remaining, checked_at, error),
+              latest_alert:alerts(level)
+            )
+          `)
+          .eq('id', id)
+          .single()
 
-      if (data) {
-        const d = data as any
-        setProvider({
-          id: d.id,
-          name: d.name,
-          organization: Array.isArray(d.organization) ? d.organization[0] : d.organization,
-          channels: (d.channels || []).map((c: any) => ({
-            id: c.id,
-            channel_name: c.channel_name,
-            channel_id: c.channel_id,
-            quota_limit: c.quota_limit,
-            latest_log: c.latest_log?.sort((a: any, b: any) =>
-              new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
-            )[0] ?? null,
-            latest_alert: c.latest_alert?.[0] ?? null,
-          })),
-        })
+        if (fetchError) throw new Error(fetchError.message)
+
+        if (data) {
+          const d = data as any
+          setProvider({
+            id: d.id,
+            name: d.name,
+            organization: Array.isArray(d.organization) ? d.organization[0] : d.organization,
+            channels: (d.channels || []).map((c: any) => ({
+              id: c.id,
+              channel_name: c.channel_name,
+              channel_id: c.channel_id,
+              quota_limit: c.quota_limit,
+              latest_log: c.latest_log?.sort((a: any, b: any) =>
+                new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
+              )[0] ?? null,
+              latest_alert: c.latest_alert?.[0] ?? null,
+            })),
+          })
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load provider')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     if (id) load()
   }, [id])
@@ -83,8 +95,24 @@ export function ProviderDetailPage() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
+        <p className="text-destructive font-medium">Failed to load provider</p>
+        <p className="text-sm text-muted-foreground mt-1">{error}</p>
+      </div>
+    )
+  }
+
   if (!provider) {
-    return <div className="text-center py-12 text-muted-foreground">Provider not found</div>
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+        <p className="text-muted-foreground">Provider not found</p>
+        <Link to="/dashboard" className="text-sm text-primary hover:underline mt-2 inline-block">&larr; Back to Dashboard</Link>
+      </div>
+    )
   }
 
   const totalUsed = provider.channels.reduce((sum, c) => sum + (c.latest_log?.quota_used ?? 0), 0)
@@ -142,7 +170,7 @@ export function ProviderDetailPage() {
                     <Link to={`/channels/${channel.id}`} className="font-medium hover:underline">
                       {channel.channel_name}
                     </Link>
-                    <p className="text-xs text-muted-foreground font-mono">{channel.channel_id}</p>
+                    <p className="text-xs text-muted-foreground font-mono truncate max-w-64">{channel.channel_id}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-muted-foreground font-mono">
