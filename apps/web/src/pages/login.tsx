@@ -55,6 +55,26 @@ export function LoginPage() {
     setSubmitting(false)
   }
 
+  const handleForgotPassword = async (e: FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setMessage('')
+    if (!email.trim()) {
+      setError('Please enter your email address')
+      return
+    }
+    setSubmitting(true)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    if (err) {
+      setError(err.message)
+    } else {
+      setMessage('Password reset link sent! Check your email.')
+    }
+    setSubmitting(false)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -77,6 +97,7 @@ export function LoginPage() {
             <TabsList className="w-full">
               <TabsTrigger value="login" className="flex-1">Sign In</TabsTrigger>
               <TabsTrigger value="signup" className="flex-1">Sign Up</TabsTrigger>
+              <TabsTrigger value="forgot" className="flex-1">Forgot</TabsTrigger>
             </TabsList>
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4 mt-4">
@@ -114,6 +135,33 @@ export function LoginPage() {
                   {submitting ? 'Creating account...' : 'Sign Up'}
                 </Button>
               </form>
+            </TabsContent>
+            <TabsContent value="forgot">
+              <div className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-email">Email</Label>
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                {message && <p className="text-sm text-emerald-600">{message}</p>}
+                <Button type="button" className="w-full" onClick={handleForgotPassword} disabled={submitting}>
+                  {submitting ? 'Sending...' : 'Send Reset Link'}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  Remember your password?{' '}
+                  <button type="button" onClick={() => setTab('login')} className="text-primary underline">
+                    Sign in
+                  </button>
+                </p>
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>

@@ -103,6 +103,7 @@ function OrgManager() {
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
   useEffect(() => { load() }, [load])
 
   const create = async () => {
@@ -195,6 +196,7 @@ function ProviderManager() {
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
   useEffect(() => { load() }, [load])
 
   const create = async () => {
@@ -346,9 +348,10 @@ function OrgMembersManager() {
     if (data) setOrgs(data)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
   useEffect(() => { loadOrgs() }, [loadOrgs])
 
-  function fetchUserEmail(userId: string): Promise<string> {
+  async function fetchUserEmail(userId: string): Promise<string> {
     try {
       const res = await fetchBackend(`/api/users/lookup?id=${userId}`)
       if (res.ok) {
@@ -381,7 +384,10 @@ function OrgMembersManager() {
   }, [])
 
   useEffect(() => {
-    if (selectedOrg) loadMembers(selectedOrg)
+    if (selectedOrg) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on org change
+      loadMembers(selectedOrg)
+    }
   }, [selectedOrg, loadMembers])
 
   const addMember = async () => {
@@ -527,6 +533,7 @@ function ChannelManager() {
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
   useEffect(() => { load() }, [load])
 
   const create = async () => {
