@@ -11,7 +11,7 @@ interface ChannelItem {
   channel_name: string
   channel_id: string
   quota_limit: number
-  latest_log: { quota_used: number; quota_remaining: number; checked_at: string; error: string | null | undefined } | null
+  latest_log: { quota_used: number; quota_remaining: number; checked_at: string; error?: string | null } | null
   latest_alert: { level: string } | null
 }
 
