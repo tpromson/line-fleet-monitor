@@ -263,6 +263,17 @@ export function IotcenterSourceDetailPage() {
                       {ev.level && eventLevelBadge(ev.level)}
                     </div>
                     {ev.message && <p className="text-muted-foreground mt-0.5">{ev.message}</p>}
+                    {ev.payload && Object.keys(ev.payload).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {Object.entries(ev.payload)
+                          .filter(([, v]) => v !== null && v !== undefined)
+                          .map(([key, value]) => (
+                            <span key={key} className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                              {key}: {typeof value === 'number' ? Number(value).toFixed(1) : String(value)}
+                            </span>
+                          ))}
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {new Date(ev.created_at).toLocaleString()}
                     </p>
