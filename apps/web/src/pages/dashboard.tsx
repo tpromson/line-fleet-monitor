@@ -186,9 +186,9 @@ export function DashboardPage() {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case 'critical': return <Badge variant="destructive">Crit</Badge>
-      case 'warning': return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Warn</Badge>
-      case 'recovery': return <Badge variant="secondary">OK</Badge>
+      case 'critical': return <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-200 border-rose-200">Crit</Badge>
+      case 'warning': return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200">Warn</Badge>
+      case 'recovery': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200">OK</Badge>
       default: return <Badge variant="outline">-</Badge>
     }
   }
@@ -302,9 +302,9 @@ export function DashboardPage() {
                                     ? Math.round((channel.latest_log.quota_used / channel.quota_limit) * 100)
                                     : 0
                                   const barColor =
-                                    status === 'critical' ? 'bg-destructive'
-                                    : status === 'warning' ? 'bg-yellow-500'
-                                    : 'bg-primary/60'
+                                    status === 'critical' ? 'bg-rose-400'
+                                    : status === 'warning' ? 'bg-amber-400'
+                                    : 'bg-emerald-400'
 
                                   return (
                                     <Link
