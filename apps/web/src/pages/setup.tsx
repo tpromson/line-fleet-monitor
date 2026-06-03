@@ -784,7 +784,7 @@ function SourceManager() {
     setLoading(true)
     const [srcRes, orgsRes, typesRes] = await Promise.all([
       supabase.from('sources').select('id, name, active, organization:organization_id(id, name), source_type:source_type_id(id, name, display_name)').order('name'),
-      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('organizations').select('id, name, created_at').order('name'),
       supabase.from('source_types').select('id, name, display_name').order('name'),
     ])
 

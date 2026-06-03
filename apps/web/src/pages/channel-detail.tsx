@@ -14,7 +14,7 @@ interface QuotaLogRow {
   checked_at: string
   quota_used: number
   quota_remaining: number
-  error?: string | null
+  error: string | null | undefined
 }
 
 interface AlertRow {
@@ -46,7 +46,7 @@ interface ChannelDetail {
   webhook_status: 'online' | 'offline' | 'unknown'
   webhook_checked_at: string | null
   provider: { id: string; name: string }
-  latest_log: { quota_used: number; quota_remaining: number; checked_at: string; error: string | null } | null
+  latest_log: { quota_used: number; quota_remaining: number; checked_at: string; error: string | null | undefined } | null
   alerts: AlertRow[]
 }
 
