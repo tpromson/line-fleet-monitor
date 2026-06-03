@@ -3,8 +3,10 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface DeviceSummary {
   id: string
@@ -42,6 +44,13 @@ interface SourceRaw {
   organization: { id: string; name: string } | { id: string; name: string }[]
 }
 
+interface TempLog {
+  timestamp: string
+  temperature: number
+}
+
+type DateRange = '1d' | '3d' | '7d' | '30d'
+
 function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
     <Card>
@@ -56,6 +65,24 @@ function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string
   )
 }
 
+const DATE_LABELS: Record<DateRange, string> = {
+  '1d': 'Today',
+  '3d': '3 Days',
+  '7d': '7 Days',
+  '30d': '30 Days',
+}
+
+function getDateSince(range: DateRange): Date {
+  const d = new Date()
+  switch (range) {
+    case '1d': d.setDate(d.getDate() - 1); break
+    case '3d': d.setDate(d.getDate() - 3); break
+    case '7d': d.setDate(d.getDate() - 7); break
+    case '30d': d.setDate(d.getDate() - 30); break
+  }
+  return d
+}
+
 export function IotcenterSourceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [source, setSource] = useState<SourceDetail | null>(null)
@@ -64,6 +91,10 @@ export function IotcenterSourceDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showApiKey, setShowApiKey] = useState(false)
+
+  const [chartRange, setChartRange] = useState<DateRange>('7d')
+  const [tempLogs, setTempLogs] = useState<TempLog[]>([])
+  const [chartLoading, setChartLoading] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -123,14 +154,54 @@ export function IotcenterSourceDetailPage() {
     }
   }, [id])
 
+  const loadChart = useCallback(async (range: DateRange) => {
+    if (!id) return
+    setChartLoading(true)
+    const since = getDateSince(range)
+
+    const { data } = await supabase
+      .from('events')
+      .select('created_at, payload')
+      .eq('source_id', id)
+      .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP'])
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: true })
+
+    if (data) {
+      setTempLogs(
+        data
+          .filter((e) => e.payload && typeof (e.payload as Record<string, unknown>).temperature === 'number')
+          .map((e) => ({
+            timestamp: new Date(e.created_at).toLocaleString(),
+            temperature: (e.payload as Record<string, unknown>).temperature as number,
+          }))
+      )
+    } else {
+      setTempLogs([])
+    }
+    setChartLoading(false)
+  }, [id])
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
     load()
   }, [load])
 
+  useEffect(() => {
+    if (source) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- chart data load on mount
+      loadChart(chartRange)
+    }
+  }, [source, chartRange, loadChart])
+
   const onlineCount = devices.filter((d) => d.status === 'online').length
   const offlineCount = devices.filter((d) => d.status === 'offline').length
   const delayedCount = devices.filter((d) => d.status === 'delayed').length
+
+  const latestTempEvent = events.find(
+    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+  )
+  const currentTemp = latestTempEvent ? (latestTempEvent.payload?.temperature as number) ?? null : null
 
   const deviceStatusBadge = (status: string) => {
     switch (status) {
@@ -176,6 +247,8 @@ export function IotcenterSourceDetailPage() {
     )
   }
 
+  const showTempChart = source.source_type.name === 'temperature'
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -208,6 +281,77 @@ export function IotcenterSourceDetailPage() {
         <StatCard icon={<XCircle className="w-4 h-4" />} value={String(offlineCount)} label="Offline" />
         <StatCard icon={<AlertTriangle className="w-4 h-4" />} value={String(delayedCount)} label="Delayed" />
       </div>
+
+      {showTempChart && currentTemp !== null && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-xs text-muted-foreground mb-1">Current Temperature</p>
+              <div className="flex items-baseline gap-1">
+                <span className={`text-2xl font-bold ${currentTemp >= 10 ? 'text-rose-600' : currentTemp >= 8 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {currentTemp.toFixed(1)}
+                </span>
+                <span className="text-sm text-muted-foreground">°C</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {new Date(latestTempEvent!.created_at).toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showTempChart && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">Temperature</CardTitle>
+              <div className="flex items-center gap-1">
+                {(Object.keys(DATE_LABELS) as DateRange[]).map((range) => (
+                  <Button
+                    key={range}
+                    variant={chartRange === range ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setChartRange(range)}
+                    disabled={chartLoading}
+                  >
+                    {DATE_LABELS[range]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {chartLoading ? (
+              <Skeleton className="h-[300px] w-full" />
+            ) : tempLogs.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground text-sm">No temperature data for this period</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={tempLogs}>
+                  <XAxis
+                    dataKey="timestamp"
+                    fontSize={12}
+                    tick={{ fontSize: 11 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis fontSize={12} unit="°C" />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="temperature"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {devices.length > 0 && (
         <Card>

@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight } from 'lucide-react'
+import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, Thermometer } from 'lucide-react'
 
 interface StatCardProps {
   icon: React.ReactNode
@@ -39,6 +39,7 @@ interface EventSummary {
   event_type: string
   level: string | null
   message: string | null
+  payload: Record<string, unknown>
   created_at: string
 }
 
@@ -49,6 +50,7 @@ interface SourceSummary {
   source_type: { name: string; display_name: string }
   organization: { id: string; name: string }
   devices: DeviceSummary[]
+  events: EventSummary[]
   last_event: EventSummary | null
 }
 
@@ -69,8 +71,18 @@ interface SourceRaw {
     event_type: string
     level: string | null
     message: string | null
+    payload: Record<string, unknown>
     created_at: string
   }>
+}
+
+interface TempWidget {
+  sourceId: string
+  sourceName: string
+  currentTemp: number | null
+  todayMax: number | null
+  todayMin: number | null
+  deviceStatus: string
 }
 
 export function IotcenterDashboardPage() {
@@ -88,24 +100,28 @@ export function IotcenterDashboardPage() {
           source_type:source_type_id(name, display_name),
           organization:organization_id(id, name),
           devices(id, device_name, status, last_seen),
-          events:events(id, event_type, level, message, created_at)
+          events:events(id, event_type, level, message, payload, created_at)
         `)
         .order('name')
 
       if (fetchError) throw new Error(fetchError.message)
 
       if (data) {
-        setSources((data as SourceRaw[]).map((s) => ({
-          id: s.id,
-          name: s.name,
-          active: s.active,
-          source_type: Array.isArray(s.source_type) ? s.source_type[0] : s.source_type,
-          organization: Array.isArray(s.organization) ? s.organization[0] : s.organization,
-          devices: s.devices || [],
-          last_event: s.events?.sort((a, b) =>
+        setSources((data as SourceRaw[]).map((s) => {
+          const sortedEvents = (s.events || []).sort((a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          )[0] ?? null,
-        })))
+          )
+          return {
+            id: s.id,
+            name: s.name,
+            active: s.active,
+            source_type: Array.isArray(s.source_type) ? s.source_type[0] : s.source_type,
+            organization: Array.isArray(s.organization) ? s.organization[0] : s.organization,
+            devices: s.devices || [],
+            events: sortedEvents,
+            last_event: sortedEvents[0] ?? null,
+          }
+        }))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')
@@ -137,6 +153,29 @@ export function IotcenterDashboardPage() {
     typeMap.get(key)!.push(s)
   }
 
+  const tempWidgets: TempWidget[] = []
+  const tempSources = typeMap.get('temperature') || []
+  if (tempSources.length > 0) {
+    for (const s of tempSources) {
+      const tempEvent = s.events.find(
+        (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+      )
+      const todayStr = new Date().toLocaleDateString()
+      const dailyReport = s.events.find(
+        (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
+      )
+
+      tempWidgets.push({
+        sourceId: s.id,
+        sourceName: s.name,
+        currentTemp: tempEvent ? (tempEvent.payload?.temperature as number) ?? null : null,
+        todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
+        todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
+        deviceStatus: s.devices.length > 0 ? s.devices[0].status : 'unknown',
+      })
+    }
+  }
+
   const deviceStatusBadge = (status: string) => {
     switch (status) {
       case 'online': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200">Online</Badge>
@@ -153,6 +192,13 @@ export function IotcenterDashboardPage() {
       case 'info': return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200">Info</Badge>
       default: return <Badge variant="outline">-</Badge>
     }
+  }
+
+  const getTempColor = (temp: number | null) => {
+    if (temp === null) return 'text-muted-foreground'
+    if (temp >= 10) return 'text-rose-600'
+    if (temp >= 8) return 'text-amber-600'
+    return 'text-emerald-600'
   }
 
   return (
@@ -182,6 +228,42 @@ export function IotcenterDashboardPage() {
           <StatCard icon={<XCircle className="w-4 h-4" />} value={String(offlineDevices)} label="Offline Devices" warn={offlineDevices > 0} />
           <StatCard icon={<AlertTriangle className="w-4 h-4" />} value={String(delayedDevices)} label="Delayed" warn={delayedDevices > 0} />
           <StatCard icon={<Activity className="w-4 h-4" />} value={String(alertCount)} label="Active Alerts" warn={alertCount > 0} />
+        </div>
+      )}
+
+      {!loading && tempWidgets.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+            <Thermometer className="w-4 h-4" /> Temperature Overview
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {tempWidgets.map((tw) => (
+              <Link key={tw.sourceId} to={`/iotcenter/sources/${tw.sourceId}`}>
+                <Card className="hover:border-primary/50 transition-colors h-full">
+                  <CardContent className="pt-4 pb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium truncate">{tw.sourceName}</span>
+                      {deviceStatusBadge(tw.deviceStatus)}
+                    </div>
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className={`text-2xl font-bold ${getTempColor(tw.currentTemp)}`}>
+                        {tw.currentTemp !== null ? tw.currentTemp.toFixed(1) : '-'}
+                      </span>
+                      <span className="text-xs text-muted-foreground">°C</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>
+                        🔺 {tw.todayMax !== null ? tw.todayMax.toFixed(1) + '°C' : '-'}
+                      </span>
+                      <span>
+                        🔻 {tw.todayMin !== null ? tw.todayMin.toFixed(1) + '°C' : '-'}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 
