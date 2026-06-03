@@ -22,6 +22,22 @@ interface ProviderDetail {
   channels: ChannelItem[]
 }
 
+interface ChannelRowData {
+  id: string
+  channel_name: string
+  channel_id: string
+  quota_limit: number
+  latest_log?: { quota_used: number; quota_remaining: number; checked_at: string; error?: string | null }[]
+  latest_alert?: { level: string }[]
+}
+
+interface ProviderRowData {
+  id: string
+  name: string
+  organization: { id: string; name: string } | { id: string; name: string }[]
+  channels: ChannelRowData[]
+}
+
 function statusBadge(channel: ChannelItem) {
   if (!channel.latest_log) return <Badge variant="outline">No Data</Badge>
   if (channel.latest_log.error) return <Badge variant="destructive">Error</Badge>
@@ -58,17 +74,17 @@ export function ProviderDetailPage() {
         if (fetchError) throw new Error(fetchError.message)
 
         if (data) {
-          const d = data as any
+          const d = data as ProviderRowData
           setProvider({
             id: d.id,
             name: d.name,
             organization: Array.isArray(d.organization) ? d.organization[0] : d.organization,
-            channels: (d.channels || []).map((c: any) => ({
+            channels: (d.channels || []).map((c) => ({
               id: c.id,
               channel_name: c.channel_name,
               channel_id: c.channel_id,
               quota_limit: c.quota_limit,
-              latest_log: c.latest_log?.sort((a: any, b: any) =>
+              latest_log: c.latest_log?.sort((a, b) =>
                 new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
               )[0] ?? null,
               latest_alert: c.latest_alert?.[0] ?? null,

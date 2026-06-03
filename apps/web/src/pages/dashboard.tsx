@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +9,27 @@ import { useAuth } from '@/hooks/use-auth'
 import { fetchBackend } from '@/lib/backend-api'
 import { toast } from 'sonner'
 import { Building2, Radio, MessageSquare, ArrowUpFromLine, ArrowDownToLine, Flame, ChevronDown, ChevronRight } from 'lucide-react'
+
+interface StatCardProps {
+  icon: React.ReactNode
+  value: string
+  label: string
+  warn?: boolean
+}
+
+function StatCard({ icon, value, label, warn }: StatCardProps) {
+  return (
+    <Card className={warn ? 'border-destructive' : ''}>
+      <CardContent className="pt-4 pb-3">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-muted-foreground">{icon}</span>
+          <span className={`text-xl font-bold ${warn ? 'text-destructive' : ''}`}>{value}</span>
+        </div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+      </CardContent>
+    </Card>
+  )
+}
 
 interface ChannelSummary {
   id: string
@@ -30,6 +51,25 @@ interface OrgGroup {
   providers: ProviderRow[]
 }
 
+interface QuotaLogRow {
+  checked_at: string
+  quota_used: number
+  quota_remaining: number
+}
+
+interface ProviderRowData {
+  id: string
+  name: string
+  organization: { id: string; name: string } | { id: string; name: string }[]
+  channels: Array<{
+    id: string
+    channel_name: string
+    quota_limit: number
+    latest_log?: QuotaLogRow[]
+    latest_alert?: { level: string }[]
+  }>
+}
+
 export function DashboardPage() {
   const { isSuperAdmin } = useAuth()
   const [providers, setProviders] = useState<ProviderRow[]>([])
@@ -45,7 +85,7 @@ export function DashboardPage() {
     .filter(Boolean)
     .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0]
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       setError(null)
       const { data, error: fetchError } = await supabase
@@ -64,15 +104,15 @@ export function DashboardPage() {
       if (fetchError) throw new Error(fetchError.message)
 
       if (data) {
-        setProviders((data as any[]).map((p) => ({
+        setProviders((data as ProviderRowData[]).map((p) => ({
           id: p.id,
           name: p.name,
           organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
-          channels: (p.channels || []).map((c: any) => ({
+          channels: (p.channels || []).map((c) => ({
             id: c.id,
             channel_name: c.channel_name,
             quota_limit: c.quota_limit,
-            latest_log: c.latest_log?.sort((a: any, b: any) =>
+            latest_log: c.latest_log?.sort((a, b) =>
               new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
             )[0] ?? null,
             latest_alert: c.latest_alert?.[0] ?? null,
@@ -84,20 +124,21 @@ export function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- polling pattern: loads data on interval
     loadDashboard()
-    const interval = setInterval(loadDashboard, 300000)
+    const interval = setInterval(() => { loadDashboard() }, 300000)
     return () => clearInterval(interval)
-  }, [])
+  }, [loadDashboard])
 
   const handleSync = async () => {
     setSyncing(true)
     try {
       await fetchBackend('/api/sync', { method: 'POST' })
       toast.success('Sync started — refreshing...')
-      setTimeout(() => loadDashboard(), 5000)
+      setTimeout(() => { loadDashboard() }, 5000)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Cannot reach backend')
     } finally { setSyncing(false) }
@@ -154,19 +195,6 @@ export function DashboardPage() {
 
   const providerHasIssue = (pr: ProviderRow) =>
     pr.channels.some((c) => getStatus(c) !== 'recovery' && getStatus(c) !== 'no-data')
-
-  // Summary card helper
-  const StatCard = ({ icon, value, label, warn }: { icon: React.ReactNode; value: string; label: string; warn?: boolean }) => (
-    <Card className={warn ? 'border-destructive' : ''}>
-      <CardContent className="pt-4 pb-3">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-muted-foreground">{icon}</span>
-          <span className={`text-xl font-bold ${warn ? 'text-destructive' : ''}`}>{value}</span>
-        </div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </CardContent>
-    </Card>
-  )
 
   return (
     <div className="space-y-6">

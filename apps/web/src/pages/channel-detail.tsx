@@ -10,11 +10,31 @@ import { fetchBackend } from '@/lib/backend-api'
 import { AlertCircle, TrendingUp, Bell, Activity } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
+interface QuotaLogRow {
+  checked_at: string
+  quota_used: number
+  quota_remaining: number
+  error?: string | null
+}
+
 interface AlertRow {
   id: string
   level: string
   message: string
   created_at: string
+}
+
+interface ChannelRowData {
+  id: string
+  channel_name: string
+  channel_id: string
+  quota_limit: number
+  active: boolean
+  webhook_status: 'online' | 'offline' | 'unknown'
+  webhook_checked_at: string | null
+  provider: { id: string; name: string } | { id: string; name: string }[]
+  latest_log?: QuotaLogRow[]
+  alerts: AlertRow[]
 }
 
 interface ChannelDetail {
@@ -82,7 +102,7 @@ export function ChannelDetailPage() {
         if (fetchError) throw new Error(fetchError.message)
 
         if (data) {
-          const d = data as any
+          const d = data as ChannelRowData
         setChannel({
           id: d.id,
           channel_name: d.channel_name,
@@ -92,7 +112,7 @@ export function ChannelDetailPage() {
           webhook_status: d.webhook_status ?? 'unknown',
           webhook_checked_at: d.webhook_checked_at ?? null,
           provider: Array.isArray(d.provider) ? d.provider[0] : d.provider,
-          latest_log: d.latest_log?.sort((a: any, b: any) =>
+          latest_log: d.latest_log?.sort((a, b) =>
             new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
           )[0] ?? null,
           alerts: d.alerts ?? [],
@@ -112,7 +132,7 @@ export function ChannelDetailPage() {
 
       if (logs) {
         setDailyLogs(
-          (logs as any[]).map((l) => ({
+          logs.map((l) => ({
             checked_at: new Date(l.checked_at).toLocaleDateString(),
             quota_used: l.quota_used,
           }))
@@ -120,7 +140,7 @@ export function ChannelDetailPage() {
       }
 
       setLoading(false)
-    } catch (err) {
+    } catch {
       setLoading(false)
     }
     }

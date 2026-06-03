@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react'
+import { useEffect, useState, useCallback, type ChangeEvent } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -96,14 +96,14 @@ function OrgManager() {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('organizations').select('id, name, created_at').order('name')
     setOrgs(data ?? [])
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const create = async () => {
     if (!name.trim()) return
@@ -172,7 +172,7 @@ function ProviderManager() {
   const [editError, setEditError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     const [provsRes, orgsRes] = await Promise.all([
       supabase.from('providers').select('id, name, organization:organization_id(id, name)').order('name'),
@@ -184,7 +184,7 @@ function ProviderManager() {
 
     if (provsRes.data) {
       setProviders(
-        (provsRes.data as any[]).map((p) => ({
+        provsRes.data.map((p) => ({
           id: p.id,
           name: p.name,
           organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
@@ -193,9 +193,9 @@ function ProviderManager() {
     }
     if (orgsRes.data) setOrgs(orgsRes.data)
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const create = async () => {
     if (!name.trim() || !orgId) return
@@ -341,13 +341,25 @@ function OrgMembersManager() {
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
 
-  useEffect(() => {
-    supabase.from('organizations').select('id, name, created_at').order('name').then(({ data }) => {
-      if (data) setOrgs(data)
-    })
+  const loadOrgs = useCallback(async () => {
+    const { data } = await supabase.from('organizations').select('id, name, created_at').order('name')
+    if (data) setOrgs(data)
   }, [])
 
-  const loadMembers = async (orgId: string) => {
+  useEffect(() => { loadOrgs() }, [loadOrgs])
+
+  function fetchUserEmail(userId: string): Promise<string> {
+    try {
+      const res = await fetchBackend(`/api/users/lookup?id=${userId}`)
+      if (res.ok) {
+        const data = await res.json()
+        return data.email ?? userId.slice(0, 8) + '...'
+      }
+    } catch { /* fall through to truncated ID below */ }
+    return userId.slice(0, 8) + '...'
+  }
+
+  const loadMembers = useCallback(async (orgId: string) => {
     setLoading(true)
     const { data } = await supabase
       .from('organization_members')
@@ -366,23 +378,11 @@ function OrgMembersManager() {
       setMembers([])
     }
     setLoading(false)
-  }
-
-  const fetchUserEmail = async (userId: string): Promise<string> => {
-    try {
-      const res = await fetchBackend(`/api/users/lookup?id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        return data.email ?? userId.slice(0, 8) + '...'
-      }
-    } catch { /* fall through to truncated ID below */ }
-    return userId.slice(0, 8) + '...'
-  }
+  }, [])
 
   useEffect(() => {
     if (selectedOrg) loadMembers(selectedOrg)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrg])
+  }, [selectedOrg, loadMembers])
 
   const addMember = async () => {
     if (!email.trim() || !selectedOrg) return
@@ -496,7 +496,7 @@ function ChannelManager() {
   const [createError, setCreateError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     const [chsRes, provsRes] = await Promise.all([
       supabase.from('channels').select('id, channel_name, channel_id, quota_limit, active, provider:provider_id(id, name)').order('channel_name'),
@@ -505,7 +505,7 @@ function ChannelManager() {
 
     if (chsRes.data) {
       setChannels(
-        (chsRes.data as any[]).map((c) => ({
+        chsRes.data.map((c) => ({
           id: c.id,
           channel_name: c.channel_name,
           channel_id: c.channel_id,
@@ -517,7 +517,7 @@ function ChannelManager() {
     }
     if (provsRes.data) {
       setProviders(
-        (provsRes.data as any[]).map((p) => ({
+        provsRes.data.map((p) => ({
           id: p.id,
           name: p.name,
           organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
@@ -525,9 +525,9 @@ function ChannelManager() {
       )
     }
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const create = async () => {
     if (!form.channel_name.trim() || !form.channel_secret.trim() || !form.access_token.trim() || !form.provider_id) return
@@ -566,6 +566,7 @@ function ChannelManager() {
   const saveEdit = async () => {
     if (!form.channel_name.trim() || !editingId) return
     setEditError('')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update: only include fields that are non-empty
     const updateData: any = {
       provider_id: form.provider_id,
       channel_name: form.channel_name.trim(),

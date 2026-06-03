@@ -7,11 +7,13 @@ describe('cn', () => {
   })
 
   it('filters falsy values', () => {
-    expect(cn('foo', false, undefined, null, 'bar')).toBe('foo bar')
+    const cond = false
+    expect(cn('foo', cond, undefined, null, 'bar')).toBe('foo bar')
   })
 
   it('handles conditional classes', () => {
-    expect(cn('base', true && 'active', false && 'hidden')).toBe('base active')
+    const active = true, hidden = false
+    expect(cn('base', active ? 'active' : null, hidden ? 'hidden' : null)).toBe('base active')
   })
 
   it('resolves tailwind conflicts via twMerge', () => {
