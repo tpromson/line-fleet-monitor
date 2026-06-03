@@ -7,6 +7,8 @@ import { DashboardPage } from '@/pages/dashboard'
 import { ProviderDetailPage } from '@/pages/provider-detail'
 import { ChannelDetailPage } from '@/pages/channel-detail'
 import { SetupPage } from '@/pages/setup'
+import { IotcenterDashboardPage } from '@/pages/iotcenter-dashboard'
+import { IotcenterSourceDetailPage } from '@/pages/iotcenter-source-detail'
 import { Toaster } from '@/components/ui/sonner'
 
 export default function App() {
@@ -25,6 +27,8 @@ export default function App() {
                   <Route path="/providers/:id" element={<ProviderDetailPage />} />
                   <Route path="/channels/:id" element={<ChannelDetailPage />} />
                   <Route path="/setup" element={<SetupPage />} />
+                  <Route path="/iotcenter" element={<IotcenterDashboardPage />} />
+                  <Route path="/iotcenter/sources/:id" element={<IotcenterSourceDetailPage />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </Layout>

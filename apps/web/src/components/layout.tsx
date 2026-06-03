@@ -30,6 +30,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/iotcenter', label: 'IoTcenter' },
     ...(isSuperAdmin ? [{ href: '/setup', label: 'Setup' }] : []),
   ]
 

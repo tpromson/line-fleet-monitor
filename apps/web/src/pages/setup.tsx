@@ -70,6 +70,7 @@ export function SetupPage() {
           <TabsTrigger value="providers">Providers</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="sources">Sources</TabsTrigger>
         </TabsList>
 
         <TabsContent value="organizations" className="mt-4">
@@ -83,6 +84,9 @@ export function SetupPage() {
         </TabsContent>
         <TabsContent value="members" className="mt-4">
           <OrgMembersManager />
+        </TabsContent>
+        <TabsContent value="sources" className="mt-4">
+          <SourceManager />
         </TabsContent>
       </Tabs>
     </div>
@@ -735,6 +739,212 @@ function ChannelManager() {
                     {c.active ? 'Pause' : 'Activate'}
                   </Button>
                   <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteChannel(c.id, c.channel_name)}>
+                    Del
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface SourceTypeRow {
+  id: string
+  name: string
+  display_name: string
+}
+
+interface SourceRow {
+  id: string
+  name: string
+  active: boolean
+  organization: { id: string; name: string }
+  source_type: { id: string; name: string; display_name: string }
+}
+
+function SourceManager() {
+  const [sources, setSources] = useState<SourceRow[]>([])
+  const [orgs, setOrgs] = useState<OrgRow[]>([])
+  const [sourceTypes, setSourceTypes] = useState<SourceTypeRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [orgId, setOrgId] = useState('')
+  const [typeId, setTypeId] = useState('')
+  const [createError, setCreateError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
+  const [apiKeyValue, setApiKeyValue] = useState('')
+  const [apiKeyLoading, setApiKeyLoading] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [srcRes, orgsRes, typesRes] = await Promise.all([
+      supabase.from('sources').select('id, name, active, organization:organization_id(id, name), source_type:source_type_id(id, name, display_name)').order('name'),
+      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('source_types').select('id, name, display_name').order('name'),
+    ])
+
+    if (srcRes.data) {
+      setSources(
+        srcRes.data.map((s) => ({
+          id: s.id,
+          name: s.name,
+          active: s.active,
+          organization: Array.isArray(s.organization) ? s.organization[0] : s.organization,
+          source_type: Array.isArray(s.source_type) ? s.source_type[0] : s.source_type,
+        }))
+      )
+    }
+    if (orgsRes.data) setOrgs(orgsRes.data)
+    if (typesRes.data) setSourceTypes(typesRes.data)
+    setLoading(false)
+  }, [])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
+  useEffect(() => { load() }, [load])
+
+  const create = async () => {
+    if (!name.trim() || !orgId || !typeId) return
+    setCreateError('')
+    setSaving(true)
+    const { error: err } = await supabase.from('sources').insert({
+      organization_id: orgId,
+      source_type_id: typeId,
+      name: name.trim(),
+    })
+    if (err) { setCreateError(err.message); setSaving(false); return }
+    setName('')
+    setOpen(false)
+    setCreateError('')
+    setSaving(false)
+    load()
+  }
+
+  const toggleActive = async (id: string, active: boolean) => {
+    await supabase.from('sources').update({ active: !active, updated_at: new Date().toISOString() }).eq('id', id)
+    load()
+  }
+
+  const deleteSource = async (id: string, sourceName: string) => {
+    if (!confirm(`Delete "${sourceName}"? This cannot be undone.`)) return
+    await supabase.from('sources').delete().eq('id', id)
+    load()
+  }
+
+  const viewApiKey = async (sourceId: string) => {
+    setApiKeyLoading(true)
+    setApiKeyDialogOpen(true)
+    setApiKeyValue('Loading...')
+    try {
+      const res = await fetchBackend(`/api/iotcenter/sources/${sourceId}/api-key`)
+      if (!res.ok) { setApiKeyValue('You must be a super admin to view API keys'); return }
+      const data = await res.json()
+      setApiKeyValue(data.api_key ?? 'Not found')
+    } catch {
+      setApiKeyValue('Cannot reach backend')
+    } finally {
+      setApiKeyLoading(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>Sources</CardTitle>
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger>
+            <Button size="sm">Add Source</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>New Source</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="src-name">Name</Label>
+                <Input id="src-name" value={name} onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)} placeholder="Temperature Monitor" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="src-org">Organization</Label>
+                <select
+                  id="src-org"
+                  value={orgId}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setOrgId(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">Select...</option>
+                  {orgs.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="src-type">Source Type</Label>
+                <select
+                  id="src-type"
+                  value={typeId}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setTypeId(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">Select...</option>
+                  {sourceTypes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.display_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
+            <Button onClick={create} disabled={!name.trim() || !orgId || !typeId || saving}>
+              {saving ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={apiKeyDialogOpen} onOpenChange={setApiKeyDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>API Key</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Copy this key to use with POST /api/iotcenter/events</p>
+              <div className="bg-muted rounded-md p-3">
+                <code className="text-xs break-all">{apiKeyLoading ? 'Loading...' : apiKeyValue}</code>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : sources.length === 0 ? (
+          <p className="text-center py-4 text-muted-foreground">No sources yet</p>
+        ) : (
+          <div className="space-y-1">
+            {sources.map((s) => (
+              <div key={s.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                <div>
+                  <span className="text-sm font-medium">{s.name}</span>
+                  <p className="text-xs text-muted-foreground">
+                    {s.organization.name} &middot; {s.source_type.display_name}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={s.active ? 'default' : 'outline'}>
+                    {s.active ? 'Active' : 'Paused'}
+                  </Badge>
+                  <Button size="sm" variant="ghost" onClick={() => viewApiKey(s.id)}>
+                    API Key
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => toggleActive(s.id, s.active)}>
+                    {s.active ? 'Pause' : 'Activate'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteSource(s.id, s.name)}>
                     Del
                   </Button>
                 </div>

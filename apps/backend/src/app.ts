@@ -7,6 +7,7 @@ import { checkAlerts } from './alert-engine.js'
 import { checkAllWebhooks } from './webhook-monitor.js'
 import { testChannelWebhook } from './lib/line-api.js'
 import { getAuthorizedChannelAccessToken, requireAuth, requireSuperAdmin } from './lib/auth.js'
+import { registerIotcenterRoutes } from './routes/iotcenter.js'
 import { supabase } from './lib/supabase.js'
 
 function requireEnv(name: string): string {
@@ -102,6 +103,8 @@ export function buildApp(): Express {
 
     res.json({ id: user.id, email: user.email })
   })
+
+  registerIotcenterRoutes(app)
 
   return app
 }
