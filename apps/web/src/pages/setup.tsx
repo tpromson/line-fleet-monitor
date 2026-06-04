@@ -239,7 +239,9 @@ function ProviderManager() {
 
   const deleteProvider = async (id: string, name: string) => {
     if (!confirm(`Delete "${name}"? This will also delete all channels under it.`)) return
+    setDeletingId(id)
     await supabase.from('providers').delete().eq('id', id)
+    setDeletingId(null)
     load()
   }
 
@@ -1113,12 +1115,6 @@ function SourceManager() {
         </Dialog>
       </CardHeader>
       <CardContent>
-        <Input
-          placeholder="Search sources..."
-          value={sourceSearch}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setSourceSearch(e.target.value)}
-          className="mb-3 h-8 text-sm"
-        />
           <div className="flex gap-2 mb-3">
             <select
               value={sourceOrgFilter}

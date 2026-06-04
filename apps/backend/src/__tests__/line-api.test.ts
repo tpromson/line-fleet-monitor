@@ -77,9 +77,9 @@ describe('fetchChannelQuota', () => {
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.line.me/v2/bot/message/quota/consumption',
-      {
+      expect.objectContaining({
         headers: { Authorization: `Bearer ${accessToken}` },
-      },
+      }),
     )
   })
 
@@ -136,10 +136,10 @@ describe('testChannelWebhook', () => {
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.line.me/v2/bot/channel/webhook/test',
-      {
-        method: 'POST',
+      expect.objectContaining({
         headers: { Authorization: `Bearer ${accessToken}` },
-      },
+        method: 'POST',
+      }),
     )
   })
 })

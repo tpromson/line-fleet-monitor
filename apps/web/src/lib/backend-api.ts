@@ -15,8 +15,17 @@ export async function fetchBackend(path: string, init: RequestInit = {}) {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  return fetch(`${getBackendUrl()}${path}`, {
-    ...init,
-    headers,
-  })
+  const response = await fetch(`${getBackendUrl()}${path}`, { ...init, headers })
+
+  if (response.status === 401 && token) {
+    const { data: refreshed } = await supabase.auth.refreshSession()
+    const newToken = refreshed.session?.access_token
+    if (newToken) {
+      const retryHeaders = new Headers(init.headers)
+      retryHeaders.set('Authorization', `Bearer ${newToken}`)
+      return fetch(`${getBackendUrl()}${path}`, { ...init, headers: retryHeaders })
+    }
+  }
+
+  return response
 }
