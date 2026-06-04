@@ -514,7 +514,7 @@ function ChannelManager() {
     const [chsRes, provsRes, orgsRes] = await Promise.all([
       supabase.from('channels').select('id, channel_name, channel_id, quota_limit, active, provider:provider_id(id, name)').order('channel_name'),
       supabase.from('providers').select('id, name, organization:organization_id(id, name)').order('name'),
-      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('organizations').select('id, name, created_at').order('name'),
     ])
 
     if (chsRes.data) {
