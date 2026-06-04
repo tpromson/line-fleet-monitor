@@ -117,13 +117,17 @@ export function IotcenterDashboardPage() {
 
       const sourceIds = srcList.map((s) => s.id)
 
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
       const { data: allEvents, error: eventsError } = await supabase
         .from('events')
         .select('id, source_id, event_type, level, message, payload, created_at')
         .in('source_id', sourceIds)
         .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'DAILY_REPORT', 'heartbeat'])
+        .gte('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false })
-        .limit(1000)
+        .limit(2000)
 
       if (eventsError) throw new Error(eventsError.message)
 

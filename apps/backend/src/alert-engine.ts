@@ -11,39 +11,57 @@ export async function checkAlerts() {
     .select('id, channel_name, quota_limit')
     .eq('active', true)
 
-  if (!channels) return
+  if (!channels || channels.length === 0) return
+
+  const channelIds = channels.map((c) => c.id)
+
+  const { data: latestLogs } = await supabase
+    .from('quota_logs')
+    .select('channel_id, quota_used')
+    .in('channel_id', channelIds)
+    .is('error', null)
+    .order('checked_at', { ascending: false })
+
+  const latestByChannel = new Map<string, number>()
+  if (latestLogs) {
+    for (const log of latestLogs) {
+      if (!latestByChannel.has(log.channel_id)) {
+        latestByChannel.set(log.channel_id, log.quota_used)
+      }
+    }
+  }
+
+  const { data: lastAlerts } = await supabase
+    .from('alerts')
+    .select('channel_id, level')
+    .in('channel_id', channelIds)
+    .order('created_at', { ascending: false })
+
+  const alertByChannel = new Map<string, string>()
+  if (lastAlerts) {
+    for (const a of lastAlerts) {
+      if (!alertByChannel.has(a.channel_id)) {
+        alertByChannel.set(a.channel_id, a.level)
+      }
+    }
+  }
+
+  const alertsToInsert: Array<Record<string, unknown>> = []
 
   for (const channel of channels) {
-    const { data: latestLog } = await supabase
-      .from('quota_logs')
-      .select('quota_used')
-      .eq('channel_id', channel.id)
-      .is('error', null)
-      .order('checked_at', { ascending: false })
-      .limit(1)
-      .single()
+    const quotaUsed = latestByChannel.get(channel.id)
+    if (quotaUsed === undefined) continue
 
-    if (!latestLog) continue
-
-    const usagePct = (latestLog.quota_used / channel.quota_limit) * 100
-
-    const { data: lastAlert } = await supabase
-      .from('alerts')
-      .select('level')
-      .eq('channel_id', channel.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
+    const usagePct = (quotaUsed / channel.quota_limit) * 100
     const newLevel = determineLevel(usagePct)
-    const lastLevel = lastAlert?.level ?? null
+    const lastLevel = alertByChannel.get(channel.id) ?? null
 
     if (newLevel === lastLevel) continue
     if (lastLevel === null && newLevel === 'recovery') continue
 
-    const message = buildMessage(channel.channel_name, latestLog.quota_used, channel.quota_limit, newLevel)
+    const message = buildMessage(channel.channel_name, quotaUsed, channel.quota_limit, newLevel)
 
-    await supabase.from('alerts').insert({
+    alertsToInsert.push({
       channel_id: channel.id,
       level: newLevel,
       message,
@@ -52,6 +70,10 @@ export async function checkAlerts() {
     await sendAlertEmail(ALERT_EMAIL_TO, `[LINE Fleet] ${newLevel.toUpperCase()}: ${channel.channel_name}`, message)
 
     console.log(`[alert] ${channel.channel_name}: ${newLevel} (${usagePct.toFixed(1)}%)`)
+  }
+
+  if (alertsToInsert.length > 0) {
+    await supabase.from('alerts').insert(alertsToInsert)
   }
 
   console.log('[alert] Check complete')

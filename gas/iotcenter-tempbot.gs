@@ -98,7 +98,7 @@ function getIoTcenterConfig() {
 // ==========================================
 // การตั้งค่าระบบ (Configuration)
 // ==========================================
-var TARGET_SPREADSHEET_ID = "xxx"; 
+var TARGET_SPREADSHEET_ID = ""; // ใส่ Spreadsheet ID ของคุณที่นี่
 
 var TEMP_COLUMN = 3; // คอลัมน์ C (A=1, B=2, C=3)
 var TEMP_IDX = TEMP_COLUMN - 1; // สำหรับดึงค่าจาก Array (A=0, B=1, C=2)

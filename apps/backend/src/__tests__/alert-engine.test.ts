@@ -36,43 +36,43 @@ describe('alert-engine', () => {
   })
 
   it('skips channel when no quota_logs found', async () => {
-    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: null }], null))
+    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [], null))
     await checkAlerts()
     expect(mockSendEmail).not.toHaveBeenCalled()
   })
 
   it('fires warning alert when usage >= 80% and no prior alert', async () => {
     const insertSpy = vi.fn().mockResolvedValue({})
-    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: 850 }], null, insertSpy))
+    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ channel_id: 'ch1', quota_used: 850 }], null, insertSpy))
     await checkAlerts()
     expect(mockSendEmail).toHaveBeenCalled()
-    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ level: 'warning' }))
+    expect(insertSpy).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ level: 'warning' })]))
   })
 
   it('fires critical alert when usage >= 95%', async () => {
     const insertSpy = vi.fn().mockResolvedValue({})
-    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: 960 }], null, insertSpy))
+    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ channel_id: 'ch1', quota_used: 960 }], null, insertSpy))
     await checkAlerts()
     expect(mockSendEmail).toHaveBeenCalled()
-    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ level: 'critical' }))
+    expect(insertSpy).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ level: 'critical' })]))
   })
 
   it('does not fire alert when usage stays at same level', async () => {
-    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: 850 }], { level: 'warning' }))
+    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ channel_id: 'ch1', quota_used: 850 }], { level: 'warning' }))
     await checkAlerts()
     expect(mockSendEmail).not.toHaveBeenCalled()
   })
 
   it('fires recovery alert when usage drops below 80% from warning', async () => {
     const insertSpy = vi.fn().mockResolvedValue({})
-    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: 500 }], { level: 'warning' }, insertSpy))
+    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ channel_id: 'ch1', quota_used: 500 }], { level: 'warning' }, insertSpy))
     await checkAlerts()
     expect(mockSendEmail).toHaveBeenCalled()
-    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ level: 'recovery' }))
+    expect(insertSpy).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ level: 'recovery' })]))
   })
 
   it('does not fire recovery alert when no prior alert exists', async () => {
-    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ quota_used: 500 }], null))
+    mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ channel_id: 'ch1', quota_used: 500 }], null))
     await checkAlerts()
     expect(mockSendEmail).not.toHaveBeenCalled()
   })
@@ -80,48 +80,41 @@ describe('alert-engine', () => {
 
 function createMockTable(
   table: string,
-  quotaLogs: { quota_used: number | null }[] | null,
-  lastAlert: { level: string } | null,
+  quotaLogs: { channel_id: string; quota_used: number | null }[],
+  lastAlertResult: { level: string } | null,
   insertSpy = vi.fn().mockResolvedValue({}),
 ) {
-  const base = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    single: vi.fn(),
-    insert: insertSpy,
-  }
-
   if (table === 'channels') {
-    base.select = vi.fn().mockReturnValue(base)
-    base.eq = vi.fn().mockResolvedValue({
+    const select = vi.fn().mockReturnThis()
+    const eq = vi.fn().mockResolvedValue({
       data: [{ id: 'ch1', channel_name: 'Test Channel', quota_limit: 1000 }],
     })
-    return base
+    select.mockReturnValue({ eq })
+    return { select, eq } as any
   }
 
   if (table === 'quota_logs') {
-    const logEntry = quotaLogs && quotaLogs.length > 0 ? quotaLogs[0] : null
-    base.select = vi.fn().mockReturnValue(base)
-    base.eq = vi.fn().mockReturnValue(base)
-    base.is = vi.fn().mockReturnValue(base)
-    base.order = vi.fn().mockReturnValue(base)
-    base.limit = vi.fn().mockReturnValue(base)
-    base.single = vi.fn().mockResolvedValue({ data: logEntry && logEntry.quota_used !== null ? logEntry : null })
-    return base
+    const select = vi.fn().mockReturnThis()
+    const inFn = vi.fn().mockReturnThis()
+    const isFn = vi.fn().mockReturnThis()
+    const order = vi.fn().mockReturnThis()
+    order.mockReturnValue({ then: (cb: any) => cb({ data: quotaLogs }) })
+    isFn.mockReturnValue({ order })
+    inFn.mockReturnValue({ is: isFn, order })
+    select.mockReturnValue({ in: inFn, order })
+    return { select, in: inFn } as any
   }
 
   if (table === 'alerts') {
-    base.select = vi.fn().mockReturnValue(base)
-    base.eq = vi.fn().mockReturnValue(base)
-    base.order = vi.fn().mockReturnValue(base)
-    base.limit = vi.fn().mockReturnValue(base)
-    base.single = vi.fn().mockResolvedValue({ data: lastAlert })
-    base.insert = insertSpy
-    return base
+    const select = vi.fn().mockReturnThis()
+    const inFn = vi.fn().mockReturnThis()
+    const order = vi.fn().mockReturnThis()
+    const data = lastAlertResult ? [{ channel_id: 'ch1', level: lastAlertResult.level }] : []
+    order.mockReturnValue({ then: (cb: any) => cb({ data }) })
+    inFn.mockReturnValue({ order })
+    select.mockReturnValue({ in: inFn })
+    return { select, in: inFn, insert: insertSpy } as any
   }
 
-  return base
+  return {} as any
 }

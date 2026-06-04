@@ -69,7 +69,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="container mx-auto px-4 py-6" id="main-content">{children}</main>
+      <main className="container mx-auto px-4 py-6" id="main-content" tabIndex={-1}>{children}</main>
     </div>
   )
 }
