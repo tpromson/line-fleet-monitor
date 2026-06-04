@@ -175,10 +175,16 @@ export function IotcenterDashboardPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount and interval
     load()
     const interval = setInterval(() => { load() }, 60000)
     return () => clearInterval(interval)
   }, [load])
+
+  const orgOptions = useMemo(
+    () => [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()],
+    [sources]
+  )
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -191,11 +197,6 @@ export function IotcenterDashboardPage() {
       }
     })
   }, [selectedOrgId, orgOptions])
-
-  const orgOptions = useMemo(
-    () => [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()],
-    [sources]
-  )
   const filteredSources = selectedOrgId === 'all' ? sources : sources.filter((s) => s.organization.id === selectedOrgId)
   const filteredWidgets = selectedOrgId === 'all' ? tempWidgets : tempWidgets.filter((tw) => sources.find((s) => s.id === tw.sourceId)?.organization.id === selectedOrgId)
 
