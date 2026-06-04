@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Area, CartesianGrid } from 'recharts'
 import { humanLabel, formatPayloadValue, formatTimestamp } from '@/lib/labels'
 import { fetchBackend } from '@/lib/backend-api'
 import { toast } from 'sonner'
@@ -379,26 +379,69 @@ export function IotcenterSourceDetailPage() {
               <p className="text-center py-8 text-muted-foreground text-sm">No temperature data for this period</p>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={tempLogs}>
+                <LineChart data={tempLogs} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <ReferenceArea
+                    y1={chartThreshold}
+                    y2={999}
+                    fill="#fef2f2"
+                    stroke="none"
+                  />
                   <XAxis
                     dataKey="timestamp"
                     fontSize={11}
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
                     interval="preserveStartEnd"
-                    height={40}
+                    height={36}
                   />
-                  <YAxis fontSize={12} unit="°C" domain={['auto', 'auto']} />
+                  <YAxis
+                    fontSize={12}
+                    unit="°C"
+                    domain={['auto', 'auto']}
+                    tick={{ fontSize: 11, fill: '#94a3b8' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={45}
+                  />
                   <Tooltip
-                    labelStyle={{ fontSize: 12 }}
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                    cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4', strokeWidth: 1 }}
+                    contentStyle={{
+                      background: '#fff',
+                      border: 'none',
+                      borderRadius: 10,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                      fontSize: 13,
+                      padding: '8px 12px',
+                    }}
                     formatter={(value: number) => [value.toFixed(1) + '°C', 'Temperature']}
+                    labelFormatter={(label: string) => label}
                   />
                   <ReferenceLine
                     y={chartThreshold}
                     stroke="#ef4444"
-                    strokeDasharray="4 4"
+                    strokeDasharray="6 3"
                     strokeWidth={1.5}
-                    label={{ value: `${chartThreshold}°C`, position: 'insideTopRight', fontSize: 11, fill: '#ef4444' }}
+                    label={{
+                      value: `${chartThreshold}°C`,
+                      position: 'insideTopRight',
+                      fontSize: 11,
+                      fill: '#ef4444',
+                      fontWeight: 600,
+                    }}
+                  />
+                  <Area
+                    type="linear"
+                    dataKey="temperature"
+                    fill="url(#tempGradient)"
+                    stroke="none"
                   />
                   <Line
                     type="linear"
@@ -406,7 +449,7 @@ export function IotcenterSourceDetailPage() {
                     stroke="#3b82f6"
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 5, fill: '#ef4444' }}
+                    activeDot={{ r: 5, fill: '#ef4444', stroke: '#fff', strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
