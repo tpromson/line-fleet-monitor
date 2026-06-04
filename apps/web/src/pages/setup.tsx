@@ -779,6 +779,12 @@ function SourceManager() {
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
   const [apiKeyValue, setApiKeyValue] = useState('')
   const [apiKeyLoading, setApiKeyLoading] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editOrgId, setEditOrgId] = useState('')
+  const [editTypeId, setEditTypeId] = useState('')
+  const [editError, setEditError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -851,6 +857,30 @@ function SourceManager() {
     }
   }
 
+  const openEdit = (s: SourceRow) => {
+    setEditingId(s.id)
+    setEditName(s.name)
+    setEditOrgId(s.organization.id)
+    setEditTypeId(s.source_type.id)
+    setEditError('')
+    setEditOpen(true)
+  }
+
+  const saveEdit = async () => {
+    if (!editName.trim() || !editingId || !editOrgId || !editTypeId) return
+    setEditError('')
+    const { error: err } = await supabase.from('sources').update({
+      name: editName.trim(),
+      organization_id: editOrgId,
+      source_type_id: editTypeId,
+      updated_at: new Date().toISOString(),
+    }).eq('id', editingId)
+    if (err) { setEditError(err.message); return }
+    setEditOpen(false)
+    setEditingId(null)
+    load()
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -905,6 +935,50 @@ function SourceManager() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Source</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-src-name">Name</Label>
+                <Input id="edit-src-name" value={editName} onChange={(e: ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-src-org">Organization</Label>
+                <select
+                  id="edit-src-org"
+                  value={editOrgId}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setEditOrgId(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">Select...</option>
+                  {orgs.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-src-type">Source Type</Label>
+                <select
+                  id="edit-src-type"
+                  value={editTypeId}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setEditTypeId(e.target.value)}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">Select...</option>
+                  {sourceTypes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.display_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <Button onClick={saveEdit} disabled={!editName.trim() || !editOrgId || !editTypeId}>Save</Button>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={apiKeyDialogOpen} onOpenChange={setApiKeyDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -940,6 +1014,9 @@ function SourceManager() {
                   </Badge>
                   <Button size="sm" variant="ghost" onClick={() => viewApiKey(s.id)}>
                     API Key
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(s)}>
+                    Edit
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => toggleActive(s.id, s.active)}>
                     {s.active ? 'Pause' : 'Activate'}
