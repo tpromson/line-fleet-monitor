@@ -390,23 +390,23 @@ export function IotcenterSourceDetailPage() {
                   <YAxis fontSize={12} unit="°C" domain={['auto', 'auto']} />
                   <Tooltip
                     labelStyle={{ fontSize: 12 }}
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                     formatter={(value: number) => [value.toFixed(1) + '°C', 'Temperature']}
                   />
                   <ReferenceLine
                     y={chartThreshold}
-                    stroke="hsl(var(--destructive))"
+                    stroke="#ef4444"
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
-                    label={{ value: `${chartThreshold}°C`, position: 'insideTopRight', fontSize: 11, fill: 'hsl(var(--destructive))' }}
+                    label={{ value: `${chartThreshold}°C`, position: 'insideTopRight', fontSize: 11, fill: '#ef4444' }}
                   />
                   <Line
                     type="linear"
                     dataKey="temperature"
-                    stroke="hsl(var(--primary))"
+                    stroke="#3b82f6"
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 4, fill: 'hsl(var(--primary))' }}
+                    activeDot={{ r: 5, fill: '#ef4444' }}
                   />
                 </LineChart>
               </ResponsiveContainer>
