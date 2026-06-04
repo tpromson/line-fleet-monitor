@@ -174,7 +174,7 @@ export function IotcenterSourceDetailPage() {
       .from('events')
       .select('created_at, payload')
       .eq('source_id', id)
-      .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP'])
+      .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'heartbeat'])
       .gte('created_at', since.toISOString())
       .order('created_at', { ascending: true })
 
@@ -186,11 +186,17 @@ export function IotcenterSourceDetailPage() {
 
     if (data) {
       const logs = data
-        .filter((e) => e.payload && typeof (e.payload as Record<string, unknown>).temperature === 'number')
-        .map((e) => ({
-          timestamp: fmt(new Date(e.created_at)),
-          temperature: (e.payload as Record<string, unknown>).temperature as number,
-        }))
+        .filter((e) => {
+          const p = e.payload as Record<string, unknown>
+          return p && (typeof p.temperature === 'number' || typeof p.lastTemperature === 'number')
+        })
+        .map((e) => {
+          const p = e.payload as Record<string, unknown>
+          return {
+            timestamp: fmt(new Date(e.created_at)),
+            temperature: (p.temperature as number) ?? (p.lastTemperature as number),
+          }
+        })
       setTempLogs(logs)
       if (logs.length > 0) {
         const maxT = Math.ceil(Math.max(...logs.map((l) => l.temperature)) + 5)
@@ -273,7 +279,8 @@ export function IotcenterSourceDetailPage() {
   }
 
   const showTempChart = events.some(
-    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
+      (e.event_type === 'heartbeat' && (e.payload?.temperature || e.payload?.lastTemperature))
   )
 
   return (
