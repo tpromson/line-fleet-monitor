@@ -172,10 +172,15 @@ export function IotcenterDashboardPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount and interval
     load()
     const interval = setInterval(() => { load() }, 60000)
     return () => clearInterval(interval)
   }, [load])
+
+  const orgOptions = [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()]
+  const filteredSources = selectedOrgId === 'all' ? sources : sources.filter((s) => s.organization.id === selectedOrgId)
+  const filteredWidgets = selectedOrgId === 'all' ? tempWidgets : tempWidgets.filter((tw) => sources.find((s) => s.id === tw.sourceId)?.organization.id === selectedOrgId)
 
   const totalSources = filteredSources.length
   const allDevices = filteredSources.flatMap((s) => s.devices)
@@ -192,10 +197,6 @@ export function IotcenterDashboardPage() {
     if (!filteredTypeMap.has(key)) filteredTypeMap.set(key, [])
     filteredTypeMap.get(key)!.push(s)
   }
-
-  const orgOptions = [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()]
-  const filteredSources = selectedOrgId === 'all' ? sources : sources.filter((s) => s.organization.id === selectedOrgId)
-  const filteredWidgets = selectedOrgId === 'all' ? tempWidgets : tempWidgets.filter((tw) => sources.find((s) => s.id === tw.sourceId)?.organization.id === selectedOrgId)
 
   const deviceStatusBadge = (status: string) => {
     switch (status) {
