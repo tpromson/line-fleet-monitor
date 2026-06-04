@@ -276,9 +276,9 @@ export function IotcenterDashboardPage() {
         </div>
       )}
 
+      <div key={selectedOrgId} className="animate-fade-in">
       {!loading && filteredWidgets.length > 0 && (
-        <div key={selectedOrgId} className="animate-fade-in">
-        <div>
+        <div className="mb-6">
           <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
             <Thermometer className="w-4 h-4" /> Temperature Overview
           </h3>
@@ -311,10 +311,8 @@ export function IotcenterDashboardPage() {
             ))}
           </div>
         </div>
-        </div>
       )}
 
-      <div key={selectedOrgId} className="animate-fade-in space-y-6">
       {loading ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
