@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
@@ -73,6 +73,9 @@ export function IotcenterDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [collapsedSources, setCollapsedSources] = useState(false)
   const [selectedOrgId, setSelectedOrgId] = useState('all')
+  const [tabStyle, setTabStyle] = useState({ left: 0, width: 0 })
+  const tabContainerRef = useRef<HTMLDivElement>(null)
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -172,13 +175,27 @@ export function IotcenterDashboardPage() {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount and interval
     load()
     const interval = setInterval(() => { load() }, 60000)
     return () => clearInterval(interval)
   }, [load])
 
-  const orgOptions = [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()]
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      const el = tabRefs.current.get(selectedOrgId)
+      const container = tabContainerRef.current
+      if (el && container) {
+        const cRect = container.getBoundingClientRect()
+        const eRect = el.getBoundingClientRect()
+        setTabStyle({ left: eRect.left - cRect.left, width: eRect.width })
+      }
+    })
+  }, [selectedOrgId, orgOptions])
+
+  const orgOptions = useMemo(
+    () => [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()],
+    [sources]
+  )
   const filteredSources = selectedOrgId === 'all' ? sources : sources.filter((s) => s.organization.id === selectedOrgId)
   const filteredWidgets = selectedOrgId === 'all' ? tempWidgets : tempWidgets.filter((tw) => sources.find((s) => s.id === tw.sourceId)?.organization.id === selectedOrgId)
 
@@ -232,30 +249,34 @@ export function IotcenterDashboardPage() {
       </div>
 
       {!loading && orgOptions.length > 0 && (
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          <Button
-            variant={selectedOrgId === 'all' ? 'default' : 'outline'}
-            size="sm"
-            className="h-7 text-xs shrink-0"
-            onClick={() => setSelectedOrgId('all')}
-          >
-            All
-          </Button>
-          {orgOptions.map((org) => (
+        <div
+          ref={tabContainerRef}
+          className="relative flex gap-1.5 overflow-x-auto rounded-lg p-1 bg-muted/50"
+        >
+          <div
+            className="absolute inset-y-1 bg-background rounded-md shadow-sm transition-all duration-300"
+            style={{ left: tabStyle.left, width: tabStyle.width }}
+          />
+          {[{ id: 'all', name: 'All' }, ...orgOptions].map((item) => (
             <Button
-              key={org.id}
-              variant={selectedOrgId === org.id ? 'default' : 'outline'}
+              key={item.id}
+              ref={(el) => {
+                if (el) tabRefs.current.set(item.id, el)
+                else tabRefs.current.delete(item.id)
+              }}
+              variant="ghost"
               size="sm"
-              className="h-7 text-xs shrink-0"
-              onClick={() => setSelectedOrgId(org.id)}
+              className="relative z-10 h-7 text-xs shrink-0"
+              onClick={() => setSelectedOrgId(item.id)}
             >
-              {org.name}
+              {item.name}
             </Button>
           ))}
         </div>
       )}
 
       {!loading && filteredWidgets.length > 0 && (
+        <div key={selectedOrgId} className="animate-fade-in">
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
             <Thermometer className="w-4 h-4" /> Temperature Overview
@@ -289,8 +310,10 @@ export function IotcenterDashboardPage() {
             ))}
           </div>
         </div>
+        </div>
       )}
 
+      <div key={selectedOrgId} className="animate-fade-in space-y-6">
       {loading ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -395,6 +418,7 @@ export function IotcenterDashboardPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }
