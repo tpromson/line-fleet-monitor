@@ -221,7 +221,7 @@ export function IotcenterSourceDetailPage() {
     (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
   )
   const currentTemp = latestTempEvent ? (latestTempEvent.payload?.temperature as number) ?? null : null
-  const srcThreshold = (source.metadata?.threshold as number) || 10
+  const srcThreshold = source ? ((source.metadata?.threshold as number) || 10) : 10
 
   const deviceStatusBadge = (status: string) => {
     switch (status) {
