@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, Thermometer } from 'lucide-react'
+import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer } from 'lucide-react'
 import { formatTimestamp } from '@/lib/labels'
 
 interface StatCardProps {
@@ -67,7 +67,7 @@ interface TempWidget {
 export function IotcenterDashboardPage() {
   const [sources, setSources] = useState<SourceSummary[]>([])
   const [tempWidgets, setTempWidgets] = useState<TempWidget[]>([])
-  const [loading, setLoading] = useState(true)
+  const [collapsedSources, setCollapsedSources] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -219,29 +219,6 @@ export function IotcenterDashboardPage() {
         <p className="text-muted-foreground text-xs">Multi-source monitoring dashboard</p>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i}><CardContent className="pt-4 pb-3"><Skeleton className="h-12 w-full" /></CardContent></Card>
-          ))}
-        </div>
-      ) : error ? (
-        <Card className="border-destructive">
-          <CardContent className="py-6 text-center">
-            <p className="text-destructive font-medium">Failed to load</p>
-            <p className="text-sm text-muted-foreground mt-1">{error}</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard icon={<Plug className="w-4 h-4" />} value={String(totalSources)} label="Sources" />
-          <StatCard icon={<CheckCircle className="w-4 h-4" />} value={onlineDevices + ' / ' + allDevices.length} label="Online Devices" />
-          <StatCard icon={<XCircle className="w-4 h-4" />} value={String(offlineDevices)} label="Offline Devices" warn={offlineDevices > 0} />
-          <StatCard icon={<AlertTriangle className="w-4 h-4" />} value={String(delayedDevices)} label="Delayed" warn={delayedDevices > 0} />
-          <StatCard icon={<Activity className="w-4 h-4" />} value={String(alertCount)} label="Active Alerts" warn={alertCount > 0} />
-        </div>
-      )}
-
       {!loading && tempWidgets.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
@@ -279,6 +256,29 @@ export function IotcenterDashboardPage() {
       )}
 
       {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}><CardContent className="pt-4 pb-3"><Skeleton className="h-12 w-full" /></CardContent></Card>
+          ))}
+        </div>
+      ) : error ? (
+        <Card className="border-destructive">
+          <CardContent className="py-6 text-center">
+            <p className="text-destructive font-medium">Failed to load</p>
+            <p className="text-sm text-muted-foreground mt-1">{error}</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <StatCard icon={<Plug className="w-4 h-4" />} value={String(totalSources)} label="Sources" />
+          <StatCard icon={<CheckCircle className="w-4 h-4" />} value={onlineDevices + ' / ' + allDevices.length} label="Online Devices" />
+          <StatCard icon={<XCircle className="w-4 h-4" />} value={String(offlineDevices)} label="Offline Devices" warn={offlineDevices > 0} />
+          <StatCard icon={<AlertTriangle className="w-4 h-4" />} value={String(delayedDevices)} label="Delayed" warn={delayedDevices > 0} />
+          <StatCard icon={<Activity className="w-4 h-4" />} value={String(alertCount)} label="Active Alerts" warn={alertCount > 0} />
+        </div>
+      )}
+
+      {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
         </div>
@@ -289,57 +289,68 @@ export function IotcenterDashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-8">
-          {[...typeMap.entries()].map(([typeName, typeSources]) => {
-            const typeDisplay = typeSources[0]?.source_type.display_name ?? typeName
-            return (
-              <div key={typeName}>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">{typeDisplay}</h3>
-                <div className="space-y-2">
-                  {typeSources.map((source) => (
-                    <Link
-                      key={source.id}
-                      to={`/iotcenter/sources/${source.id}`}
-                      className="block"
-                    >
-                      <Card className="hover:border-primary/50 transition-colors">
-                        <CardContent className="py-3 px-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{source.name}</span>
-                                {!source.active && <Badge variant="outline" className="text-xs">Paused</Badge>}
+        <div>
+          <button
+            onClick={() => setCollapsedSources(!collapsedSources)}
+            className="flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground mb-3 w-full text-left"
+          >
+            {collapsedSources ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            All Sources ({sources.length})
+          </button>
+          {!collapsedSources && (
+            <div className="space-y-8">
+              {[...typeMap.entries()].map(([typeName, typeSources]) => {
+                const typeDisplay = typeSources[0]?.source_type.display_name ?? typeName
+                return (
+                  <div key={typeName}>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{typeDisplay}</h3>
+                    <div className="space-y-2">
+                      {typeSources.map((source) => (
+                        <Link
+                          key={source.id}
+                          to={`/iotcenter/sources/${source.id}`}
+                          className="block"
+                        >
+                          <Card className="hover:border-primary/50 transition-colors">
+                            <CardContent className="py-3 px-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium truncate">{source.name}</span>
+                                    {!source.active && <Badge variant="outline" className="text-xs">Paused</Badge>}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-xs text-muted-foreground">{source.organization.name}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {source.devices.length} device{source.devices.length !== 1 ? 's' : ''}
+                                    </span>
+                                    {source.last_event && (
+                                      <span className="text-xs text-muted-foreground">
+                                        Last: {formatTimestamp(source.last_event.created_at)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {source.last_event && levelBadge(source.last_event.level)}
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                </div>
                               </div>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-xs text-muted-foreground">{source.organization.name}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {source.devices.length} device{source.devices.length !== 1 ? 's' : ''}
-                                </span>
-                                {source.last_event && (
-                                  <span className="text-xs text-muted-foreground">
-                                    Last: {formatTimestamp(source.last_event.created_at)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {source.last_event && levelBadge(source.last_event.level)}
-                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                          </div>
-                          {source.devices.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {source.devices.map((d) => deviceStatusBadge(d.status))}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+                              {source.devices.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {source.devices.map((d) => deviceStatusBadge(d.status))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
