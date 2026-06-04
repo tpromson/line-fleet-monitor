@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts'
 import { humanLabel, formatPayloadValue, formatTimestamp } from '@/lib/labels'
 import { fetchBackend } from '@/lib/backend-api'
 import { toast } from 'sonner'
@@ -378,32 +378,67 @@ export function IotcenterSourceDetailPage() {
             ) : tempLogs.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground text-sm">No temperature data for this period</p>
             ) : (
+              (() => {
+                const temps = tempLogs.map((l) => l.temperature)
+                const dataMin = temps.length > 0 ? Math.floor(Math.min(...temps) - 1) : 0
+                const dataMax = temps.length > 0 ? Math.ceil(Math.max(...temps) + 1) : 30
+                const maxTemp = Math.max(dataMax, chartThreshold + 2)
+
+                return (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={tempLogs}>
+                  <defs>
+                    <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <ReferenceArea
+                    y1={chartThreshold}
+                    y2={maxTemp}
+                    fill="hsl(var(--destructive))"
+                    fillOpacity={0.06}
+                    stroke="none"
+                  />
                   <XAxis
                     dataKey="timestamp"
                     fontSize={11}
                     tick={{ fontSize: 10 }}
                     interval="preserveStartEnd"
+                    height={40}
                   />
-                  <YAxis fontSize={12} unit="°C" />
-                  <Tooltip />
+                  <YAxis
+                    fontSize={12}
+                    unit="°C"
+                    domain={[dataMin, maxTemp]}
+                    tickCount={6}
+                  />
+                  <Tooltip
+                    labelStyle={{ fontSize: 12 }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                    formatter={(value: number) => [value.toFixed(1) + '°C', 'Temperature']}
+                    labelFormatter={(label: string) => label}
+                  />
                   <ReferenceLine
                     y={chartThreshold}
                     stroke="hsl(var(--destructive))"
                     strokeDasharray="4 4"
-                    strokeWidth={1}
-                    label={{ value: `${chartThreshold}°C`, position: 'right', fontSize: 11, fill: 'hsl(var(--destructive))' }}
+                    strokeWidth={1.5}
+                    label={{ value: `Threshold ${chartThreshold}°C`, position: 'insideTopRight', fontSize: 11, fill: 'hsl(var(--destructive))' }}
                   />
                   <Line
-                    type="monotone"
+                    yAxisId={0}
+                    type="linear"
                     dataKey="temperature"
                     stroke="hsl(var(--primary))"
                     strokeWidth={2}
                     dot={false}
+                    activeDot={{ r: 4, fill: 'hsl(var(--primary))' }}
                   />
                 </LineChart>
               </ResponsiveContainer>
+                )
+              })()
             )}
           </CardContent>
         </Card>
