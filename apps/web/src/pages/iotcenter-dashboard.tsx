@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, Thermometer } from 'lucide-react'
+import { formatTimestamp } from '@/lib/labels'
 
 interface StatCardProps {
   icon: React.ReactNode
@@ -234,7 +235,7 @@ export function IotcenterDashboardPage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard icon={<Plug className="w-4 h-4" />} value={String(totalSources)} label="Sources" />
-          <StatCard icon={<CheckCircle className="w-4 h-4" />} value={String(onlineDevices)} label="Online Devices" />
+          <StatCard icon={<CheckCircle className="w-4 h-4" />} value={onlineDevices + ' / ' + allDevices.length} label="Online Devices" />
           <StatCard icon={<XCircle className="w-4 h-4" />} value={String(offlineDevices)} label="Offline Devices" warn={offlineDevices > 0} />
           <StatCard icon={<AlertTriangle className="w-4 h-4" />} value={String(delayedDevices)} label="Delayed" warn={delayedDevices > 0} />
           <StatCard icon={<Activity className="w-4 h-4" />} value={String(alertCount)} label="Active Alerts" warn={alertCount > 0} />
@@ -316,7 +317,7 @@ export function IotcenterDashboardPage() {
                                 </span>
                                 {source.last_event && (
                                   <span className="text-xs text-muted-foreground">
-                                    Last: {new Date(source.last_event.created_at).toLocaleString()}
+                                    Last: {formatTimestamp(source.last_event.created_at)}
                                   </span>
                                 )}
                               </div>

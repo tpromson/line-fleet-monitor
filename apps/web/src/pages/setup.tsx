@@ -1045,6 +1045,18 @@ function SourceManager() {
               <div className="bg-muted rounded-md p-3">
                 <code className="text-xs break-all">{apiKeyLoading ? 'Loading...' : apiKeyValue}</code>
               </div>
+              {!apiKeyLoading && apiKeyValue && apiKeyValue !== 'Not found' && apiKeyValue !== 'Cannot reach backend' && apiKeyValue !== 'You must be a super admin to view API keys' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(apiKeyValue)
+                    toast.success('Copied to clipboard')
+                  }}
+                >
+                  Copy
+                </Button>
+              )}
             </div>
           </DialogContent>
         </Dialog>

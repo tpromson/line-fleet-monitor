@@ -30,3 +30,18 @@ export function formatPayloadValue(value: unknown): string {
 export function payloadEntryLabel(key: string, value: unknown): string {
   return `${humanLabel(key)}: ${formatPayloadValue(value)}`
 }
+
+export function formatTimestamp(isoString: string): string {
+  const d = new Date(isoString)
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+export function formatTimestampShort(isoString: string): string {
+  const d = new Date(isoString)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 60) return diffMin + 'm ago'
+  if (diffMin < 1440) return Math.floor(diffMin / 60) + 'h ago'
+  return d.toLocaleDateString()
+}

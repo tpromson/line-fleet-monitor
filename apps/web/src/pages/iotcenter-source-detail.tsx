@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { humanLabel, formatPayloadValue } from '@/lib/labels'
+import { humanLabel, formatPayloadValue, formatTimestamp } from '@/lib/labels'
+import { fetchBackend } from '@/lib/backend-api'
+import { toast } from 'sonner'
 
 interface DeviceSummary {
   id: string
@@ -92,6 +94,7 @@ export function IotcenterSourceDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showApiKey, setShowApiKey] = useState(false)
+  const [apiKeyValue, setApiKeyValue] = useState('')
 
   const [chartRange, setChartRange] = useState<DateRange>('7d')
   const [tempLogs, setTempLogs] = useState<TempLog[]>([])
@@ -286,13 +289,42 @@ export function IotcenterSourceDetailPage() {
         <div className="flex items-center gap-2">
           {!source.active && <Badge variant="outline">Paused</Badge>}
           <button
-            onClick={() => setShowApiKey(!showApiKey)}
+            onClick={async () => {
+              if (!showApiKey && !apiKeyValue) {
+                try {
+                  const res = await fetchBackend(`/api/iotcenter/sources/${source.id}/api-key`)
+                  if (res.ok) {
+                    const data = await res.json()
+                    setApiKeyValue(data.api_key ?? '')
+                  }
+                } catch { /* ignore */ }
+              }
+              setShowApiKey(!showApiKey)
+            }}
             className="text-xs text-muted-foreground hover:text-foreground underline"
           >
             {showApiKey ? 'Hide' : 'Show'} API Key
           </button>
+          {showApiKey && apiKeyValue && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={() => {
+                navigator.clipboard.writeText(apiKeyValue)
+                toast.success('API Key copied')
+              }}
+            >
+              <Copy className="w-3 h-3 mr-1" /> Copy
+            </Button>
+          )}
         </div>
       </div>
+      {showApiKey && apiKeyValue && (
+        <div className="bg-muted rounded-md p-2">
+          <code className="text-xs break-all text-muted-foreground">{apiKeyValue}</code>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard icon={<Monitor className="w-4 h-4" />} value={String(devices.length)} label="Total Devices" />
@@ -313,7 +345,7 @@ export function IotcenterSourceDetailPage() {
                 <span className="text-sm text-muted-foreground">°C</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {new Date(latestTempEvent!.created_at).toLocaleString()}
+                {formatTimestamp(latestTempEvent!.created_at)}
               </p>
             </CardContent>
           </Card>
@@ -400,7 +432,7 @@ export function IotcenterSourceDetailPage() {
                       <td className="py-2 text-muted-foreground">{d.device_type}</td>
                       <td className="py-2">{deviceStatusBadge(d.status)}</td>
                       <td className="py-2 text-muted-foreground">
-                        {d.last_seen ? new Date(d.last_seen).toLocaleString() : '-'}
+                        {d.last_seen ? formatTimestamp(d.last_seen) : '-'}
                       </td>
                     </tr>
                   ))}
@@ -471,7 +503,7 @@ export function IotcenterSourceDetailPage() {
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(ev.created_at).toLocaleString()}
+                      {formatTimestamp(ev.created_at)}
                     </p>
                   </div>
                 </div>
