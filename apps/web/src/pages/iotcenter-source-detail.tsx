@@ -34,6 +34,7 @@ interface SourceDetail {
   name: string
   active: boolean
   api_key?: string
+  metadata: Record<string, unknown>
   source_type: { name: string; display_name: string }
   organization: { id: string; name: string }
 }
@@ -43,6 +44,7 @@ interface SourceRaw {
   name: string
   active: boolean
   api_key?: string
+  metadata: Record<string, unknown>
   source_type: { name: string; display_name: string } | { name: string; display_name: string }[]
   organization: { id: string; name: string } | { id: string; name: string }[]
 }
@@ -110,7 +112,7 @@ export function IotcenterSourceDetailPage() {
       const { data: sourceData, error: sourceError } = await supabase
         .from('sources')
         .select(`
-          id, name, active,
+          id, name, active, metadata,
           source_type:source_type_id(name, display_name),
           organization:organization_id(id, name)
         `)
@@ -132,6 +134,8 @@ export function IotcenterSourceDetailPage() {
           id: raw.id,
           name: raw.name,
           active: raw.active,
+          api_key: raw.api_key,
+          metadata: (raw.metadata as Record<string, unknown>) || {},
           source_type: Array.isArray(raw.source_type) ? raw.source_type[0] : raw.source_type,
           organization: Array.isArray(raw.organization) ? raw.organization[0] : raw.organization,
         })
@@ -160,7 +164,7 @@ export function IotcenterSourceDetailPage() {
     }
   }, [id])
 
-  const loadChart = useCallback(async (range: DateRange) => {
+  const loadChart = useCallback(async (range: DateRange, srcThreshold: number) => {
     if (!id) return
     setChartLoading(true)
     const since = getDateSince(range)
@@ -179,26 +183,20 @@ export function IotcenterSourceDetailPage() {
       ? (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })
       : (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-    let threshold = 0
-
     if (data) {
       setTempLogs(
         data
           .filter((e) => e.payload && typeof (e.payload as Record<string, unknown>).temperature === 'number')
-          .map((e) => {
-            const th = (e.payload as Record<string, unknown>).threshold as number
-            if (th && th > threshold) threshold = th
-            return {
-              timestamp: fmt(new Date(e.created_at)),
-              temperature: (e.payload as Record<string, unknown>).temperature as number,
-            }
-          })
+          .map((e) => ({
+            timestamp: fmt(new Date(e.created_at)),
+            temperature: (e.payload as Record<string, unknown>).temperature as number,
+          }))
       )
     } else {
       setTempLogs([])
     }
 
-    setChartThreshold(threshold || 10)
+    setChartThreshold(srcThreshold || 10)
     setChartLoading(false)
   }, [id])
 
@@ -209,8 +207,9 @@ export function IotcenterSourceDetailPage() {
 
   useEffect(() => {
     if (source) {
+      const srcThreshold = (source.metadata?.threshold as number) || 10
       // eslint-disable-next-line react-hooks/set-state-in-effect -- chart data load on mount
-      loadChart(chartRange)
+      loadChart(chartRange, srcThreshold)
     }
   }, [source, chartRange, loadChart])
 
@@ -222,6 +221,7 @@ export function IotcenterSourceDetailPage() {
     (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
   )
   const currentTemp = latestTempEvent ? (latestTempEvent.payload?.temperature as number) ?? null : null
+  const srcThreshold = (source.metadata?.threshold as number) || 10
 
   const deviceStatusBadge = (status: string) => {
     switch (status) {
@@ -339,7 +339,7 @@ export function IotcenterSourceDetailPage() {
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground mb-1">Current Temperature</p>
               <div className="flex items-baseline gap-1">
-                <span className={`text-2xl font-bold ${currentTemp >= 10 ? 'text-rose-600' : currentTemp >= 8 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                <span className={`text-2xl font-bold ${currentTemp >= srcThreshold ? 'text-rose-600' : currentTemp >= srcThreshold * 0.9 ? 'text-amber-600' : 'text-emerald-600'}`}>
                   {currentTemp.toFixed(1)}
                 </span>
                 <span className="text-sm text-muted-foreground">°C</span>

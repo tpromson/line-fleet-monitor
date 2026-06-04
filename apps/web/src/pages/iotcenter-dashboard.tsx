@@ -49,6 +49,7 @@ interface SourceSummary {
   id: string
   name: string
   active: boolean
+  metadata: Record<string, unknown>
   source_type: { name: string; display_name: string }
   organization: { id: string; name: string }
   devices: DeviceSummary[]
@@ -61,6 +62,7 @@ interface TempWidget {
   currentTemp: number | null
   todayMax: number | null
   todayMin: number | null
+  threshold: number
   deviceStatus: string
 }
 
@@ -78,7 +80,7 @@ export function IotcenterDashboardPage() {
       const { data: sourcesData, error: sourcesError } = await supabase
         .from('sources')
         .select(`
-          id, name, active,
+          id, name, active, metadata,
           source_type:source_type_id(name, display_name),
           organization:organization_id(id, name),
           devices(id, device_name, status, last_seen)
@@ -91,6 +93,7 @@ export function IotcenterDashboardPage() {
         id: s.id as string,
         name: s.name as string,
         active: s.active as boolean,
+        metadata: (s.metadata as Record<string, unknown>) || {},
         source_type: (Array.isArray(s.source_type) ? s.source_type[0] : s.source_type) as { name: string; display_name: string },
         organization: (Array.isArray(s.organization) ? s.organization[0] : s.organization) as { id: string; name: string },
         devices: (s.devices || []) as DeviceSummary[],
@@ -146,14 +149,15 @@ export function IotcenterDashboardPage() {
           (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
         )
 
-        widgets.push({
-          sourceId: src.id,
-          sourceName: src.name,
-          currentTemp: (tempEvent.payload?.temperature as number) ?? null,
-          todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
-          todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
-          deviceStatus: src.devices.length > 0 ? src.devices[0].status : 'unknown',
-        })
+    widgets.push({
+      sourceId: src.id,
+      sourceName: src.name,
+      currentTemp: (tempEvent.payload?.temperature as number) ?? null,
+      todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
+      todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
+      threshold: (src.metadata?.threshold as number) || 10,
+      deviceStatus: src.devices.length > 0 ? src.devices[0].status : 'unknown',
+    })
       }
 
       setSources(srcList)
@@ -206,10 +210,10 @@ export function IotcenterDashboardPage() {
     }
   }
 
-  const getTempColor = (temp: number | null) => {
+  const getTempColor = (temp: number | null, threshold: number) => {
     if (temp === null) return 'text-muted-foreground'
-    if (temp >= 10) return 'text-rose-600'
-    if (temp >= 8) return 'text-amber-600'
+    if (temp >= threshold) return 'text-rose-600'
+    if (temp >= threshold * 0.9) return 'text-amber-600'
     return 'text-emerald-600'
   }
 
@@ -235,7 +239,7 @@ export function IotcenterDashboardPage() {
                       {deviceStatusBadge(tw.deviceStatus)}
                     </div>
                     <div className="flex items-baseline gap-1 mb-1">
-                      <span className={`text-2xl font-bold ${getTempColor(tw.currentTemp)}`}>
+                      <span className={`text-2xl font-bold ${getTempColor(tw.currentTemp, tw.threshold)}`}>
                         {tw.currentTemp !== null ? tw.currentTemp.toFixed(1) : '-'}
                       </span>
                       <span className="text-xs text-muted-foreground">°C</span>

@@ -762,6 +762,7 @@ interface SourceRow {
   name: string
   active: boolean
   channel_id?: string | null
+  metadata: Record<string, unknown>
   organization: { id: string; name: string }
   source_type: { id: string; name: string; display_name: string }
 }
@@ -777,6 +778,7 @@ function SourceManager() {
   const [orgId, setOrgId] = useState('')
   const [typeId, setTypeId] = useState('')
   const [channelId, setChannelId] = useState('')
+  const [threshold, setThreshold] = useState('')
   const [createError, setCreateError] = useState('')
   const [saving, setSaving] = useState(false)
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
@@ -788,12 +790,13 @@ function SourceManager() {
   const [editOrgId, setEditOrgId] = useState('')
   const [editTypeId, setEditTypeId] = useState('')
   const [editChannelId, setEditChannelId] = useState('')
+  const [editThreshold, setEditThreshold] = useState('')
   const [editError, setEditError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     const [srcRes, orgsRes, typesRes, chsRes] = await Promise.all([
-      supabase.from('sources').select('id, name, active, channel_id, organization:organization_id(id, name), source_type:source_type_id(id, name, display_name)').order('name'),
+      supabase.from('sources').select('id, name, active, metadata, channel_id, organization:organization_id(id, name), source_type:source_type_id(id, name, display_name)').order('name'),
       supabase.from('organizations').select('id, name, created_at').order('name'),
       supabase.from('source_types').select('id, name, display_name').order('name'),
       supabase.from('channels').select('id, channel_name, provider:provider_id(organization_id, name)').eq('active', true).order('channel_name'),
@@ -805,6 +808,7 @@ function SourceManager() {
           id: s.id,
           name: s.name,
           active: s.active,
+          metadata: (s.metadata as Record<string, unknown>) || {},
           channel_id: s.channel_id ?? null,
           organization: Array.isArray(s.organization) ? s.organization[0] : s.organization,
           source_type: Array.isArray(s.source_type) ? s.source_type[0] : s.source_type,
@@ -836,6 +840,7 @@ function SourceManager() {
       source_type_id: typeId,
       name: name.trim(),
       channel_id: channelId || null,
+      metadata: { threshold: parseInt(threshold) || 0 },
     })
     if (err) { setCreateError(err.message); setSaving(false); return }
     setName('')
@@ -879,6 +884,7 @@ function SourceManager() {
     setEditOrgId(s.organization.id)
     setEditTypeId(s.source_type.id)
     setEditChannelId(s.channel_id || '')
+    setEditThreshold(String(s.metadata?.threshold || ''))
     setEditError('')
     setEditOpen(true)
   }
@@ -891,6 +897,7 @@ function SourceManager() {
       organization_id: editOrgId,
       source_type_id: editTypeId,
       channel_id: editChannelId || null,
+      metadata: { threshold: parseInt(editThreshold) || 0 },
       updated_at: new Date().toISOString(),
     }).eq('id', editingId)
     if (err) { setEditError(err.message); return }
@@ -949,6 +956,10 @@ function SourceManager() {
                     <option key={ch.id} value={ch.id}>{ch.channel_name}</option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="src-threshold">Threshold (°C)</Label>
+                <Input id="src-threshold" type="number" value={threshold} onChange={(e: ChangeEvent<HTMLInputElement>) => setThreshold(e.target.value)} placeholder="8" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="src-type">Source Type</Label>
@@ -1014,6 +1025,10 @@ function SourceManager() {
                     <option key={ch.id} value={ch.id}>{ch.channel_name}</option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-src-threshold">Threshold (°C)</Label>
+                <Input id="edit-src-threshold" type="number" value={editThreshold} onChange={(e: ChangeEvent<HTMLInputElement>) => setEditThreshold(e.target.value)} placeholder="8" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-src-type">Source Type</Label>
