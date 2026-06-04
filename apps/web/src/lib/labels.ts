@@ -23,7 +23,7 @@ export function humanLabel(key: string): string {
 
 export function formatPayloadValue(value: unknown): string {
   if (value === null || value === undefined) return '-'
-  if (typeof value === 'number') return Number(value).toFixed(1)
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(1)
   return String(value)
 }
 

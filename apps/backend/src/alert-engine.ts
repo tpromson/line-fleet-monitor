@@ -1,7 +1,7 @@
 import { supabase } from './lib/supabase.js'
 import { sendAlertEmail } from './lib/email.js'
 
-const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO?.split(',').map((e) => e.trim()) ?? []
+const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO?.split(',').map((e) => e.trim()).filter(Boolean) ?? []
 
 export async function checkAlerts() {
   console.log('[alert] Checking thresholds...')

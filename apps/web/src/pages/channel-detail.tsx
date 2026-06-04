@@ -67,7 +67,7 @@ function calculateForecast(quotaUsed: number, quotaLimit: number, checkedAt: str
   const daysElapsed = now.getDate()
 
   if (daysElapsed <= 1 || quotaUsed === 0) {
-    return { daysElapsed: 0, avgDaily: 0, remaining: quotaLimit, daysLeft: 0 }
+    return { daysElapsed, avgDaily: 0, remaining: quotaLimit, daysLeft: 0 }
   }
 
   const avgDaily = quotaUsed / daysElapsed
@@ -149,7 +149,8 @@ export function ChannelDetailPage() {
       }
 
       setLoading(false)
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load channel data')
       setLoading(false)
     }
     }
@@ -181,7 +182,7 @@ export function ChannelDetailPage() {
 
   const usagePct = channel.latest_log && !channel.latest_log.error
     ? (channel.latest_log.quota_used / channel.quota_limit) * 100
-    : 0
+    : (channel.latest_log?.error ? -1 : 0)
 
   const alertBadge = (level: string) => {
     switch (level) {
@@ -227,9 +228,9 @@ export function ChannelDetailPage() {
             <p className="text-xs text-muted-foreground">Remaining</p>
           </CardContent>
         </Card>
-        <Card className={`hover:shadow-md hover:scale-[1.02] transition-all duration-150 border-l-2 ${usagePct >= 95 ? 'border-l-rose-400' : usagePct >= 80 ? 'border-l-amber-400' : 'border-l-emerald-400'}`}>
+        <Card className={`hover:shadow-md hover:scale-[1.02] transition-all duration-150 border-l-2 ${usagePct === -1 ? 'border-l-muted-foreground' : usagePct >= 95 ? 'border-l-rose-400' : usagePct >= 80 ? 'border-l-amber-400' : 'border-l-emerald-400'}`}>
           <CardContent className="pt-6">
-            <div className={`text-xl font-bold ${usagePct >= 95 ? 'text-rose-600' : usagePct >= 80 ? 'text-amber-600' : 'text-emerald-600'}`}>{usagePct.toFixed(1)}%</div>
+            <div className={`text-xl font-bold ${usagePct === -1 ? 'text-muted-foreground' : usagePct >= 95 ? 'text-rose-600' : usagePct >= 80 ? 'text-amber-600' : 'text-emerald-600'}`}>{usagePct === -1 ? 'Error' : usagePct.toFixed(1) + '%'}</div>
             <p className="text-xs text-muted-foreground">Usage</p>
           </CardContent>
         </Card>

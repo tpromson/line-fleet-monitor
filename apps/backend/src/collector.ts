@@ -1,6 +1,8 @@
 import { supabase } from './lib/supabase.js'
 import { fetchChannelQuota, sleep } from './lib/line-api.js'
 
+const CONCURRENCY = 3
+
 export async function collectAllQuotas() {
   console.log('[collector] Starting quota collection...')
 
@@ -16,28 +18,29 @@ export async function collectAllQuotas() {
 
   console.log(`[collector] Found ${channels.length} active channels`)
 
-  for (const channel of channels) {
-    try {
-      const quota = await fetchChannelQuota(channel.access_token, channel.quota_limit)
-
-      await supabase.from('quota_logs').insert({
-        channel_id: channel.id,
-        quota_limit: quota.limit,
-        quota_used: quota.used,
-        quota_remaining: quota.remaining,
-        error: quota.error ?? null,
-      })
-
-      if (quota.error) {
-        console.warn(`[collector] ${channel.channel_name}: ${quota.error}`)
-      } else {
-        console.log(`[collector] ${channel.channel_name}: ${quota.used}/${quota.limit}`)
+  for (let i = 0; i < channels.length; i += CONCURRENCY) {
+    const batch = channels.slice(i, i + CONCURRENCY)
+    const results: Promise<void>[] = batch.map(async (channel) => {
+      try {
+        const quota = await fetchChannelQuota(channel.access_token, channel.quota_limit)
+        await supabase.from('quota_logs').insert({
+          channel_id: channel.id,
+          quota_limit: quota.limit,
+          quota_used: quota.used,
+          quota_remaining: quota.remaining,
+          error: quota.error ?? null,
+        })
+        if (quota.error) {
+          console.warn(`[collector] ${channel.channel_name}: ${quota.error}`)
+        } else {
+          console.log(`[collector] ${channel.channel_name}: ${quota.used}/${quota.limit}`)
+        }
+      } catch (err) {
+        console.error(`[collector] ${channel.channel_name}: unexpected error`, err)
       }
-    } catch (err) {
-      console.error(`[collector] ${channel.channel_name}: unexpected error`, err)
-    }
-
-    await sleep(500)
+    })
+    await Promise.allSettled(results)
+    if (i + CONCURRENCY < channels.length) await sleep(300)
   }
 
   console.log('[collector] Collection complete')

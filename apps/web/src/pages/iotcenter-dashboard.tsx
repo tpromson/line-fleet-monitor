@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { StatCard } from '@/components/stat-card'
 import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer, Snowflake } from 'lucide-react'
 import { formatTimestamp } from '@/lib/labels'
 
@@ -188,7 +189,6 @@ export function IotcenterDashboardPage() {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount and interval
     load()
     const interval = setInterval(() => { load() }, 60000)
     return () => clearInterval(interval)

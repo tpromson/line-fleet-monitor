@@ -7,29 +7,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { fetchBackend } from '@/lib/backend-api'
+import { StatCard } from '@/components/stat-card'
 import { toast } from 'sonner'
 import { Building2, Radio, MessageSquare, ArrowUpFromLine, ArrowDownToLine, Flame, ChevronDown, ChevronRight } from 'lucide-react'
-
-interface StatCardProps {
-  icon: React.ReactNode
-  value: string
-  label: string
-  warn?: boolean
-}
-
-function StatCard({ icon, value, label, warn }: StatCardProps) {
-  return (
-    <Card className={warn ? 'border-destructive' : ''}>
-      <CardContent className="pt-4 pb-3">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-muted-foreground">{icon}</span>
-          <span className={`text-xl font-bold ${warn ? 'text-destructive' : ''}`}>{value}</span>
-        </div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </CardContent>
-    </Card>
-  )
-}
 
 interface ChannelSummary {
   id: string
@@ -95,8 +75,8 @@ export function DashboardPage() {
           organization:organization_id (id, name),
           channels (
             id, channel_name, quota_limit,
-            latest_log:quota_logs(quota_used, quota_remaining, checked_at),
-            latest_alert:alerts(level)
+            latest_log:quota_logs(quota_used, quota_remaining, checked_at).order(checked_at.desc).limit(1),
+            latest_alert:alerts(level).order(created_at.desc).limit(1)
           )
         `)
         .order('name')
