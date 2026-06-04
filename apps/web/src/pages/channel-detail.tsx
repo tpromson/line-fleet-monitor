@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchBackend } from '@/lib/backend-api'
 import { AlertCircle, TrendingUp, Bell, Activity } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area } from 'recharts'
 
 interface QuotaLogRow {
   checked_at: string
@@ -194,13 +194,13 @@ export function ChannelDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
           <CardContent className="pt-6">
             <div className="text-xl font-bold">{channel.quota_limit.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Quota Limit</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
           <CardContent className="pt-6">
             <div className="text-xl font-bold">
               {channel.latest_log ? channel.latest_log.quota_used.toLocaleString() : '-'}
@@ -208,7 +208,7 @@ export function ChannelDetailPage() {
             <p className="text-xs text-muted-foreground">Used</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
           <CardContent className="pt-6">
             <div className="text-xl font-bold">
               {channel.latest_log && !channel.latest_log.error
@@ -218,9 +218,9 @@ export function ChannelDetailPage() {
             <p className="text-xs text-muted-foreground">Remaining</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
           <CardContent className="pt-6">
-            <div className="text-xl font-bold">{usagePct.toFixed(1)}%</div>
+            <div className={`text-xl font-bold ${usagePct >= 95 ? 'text-rose-600' : usagePct >= 80 ? 'text-amber-600' : 'text-emerald-600'}`}>{usagePct.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">Usage</p>
           </CardContent>
         </Card>
@@ -248,10 +248,22 @@ export function ChannelDetailPage() {
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={dailyLogs}>
-                    <XAxis dataKey="checked_at" fontSize={12} />
-                    <YAxis fontSize={12} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="quota_used" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                    <defs>
+                      <linearGradient id="quotaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="checked_at" fontSize={11} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} />
+                    <YAxis fontSize={12} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={45} />
+                    <Tooltip
+                      cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4', strokeWidth: 1 }}
+                      contentStyle={{ background: '#fff', border: 'none', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 13, padding: '8px 12px' }}
+                      formatter={(value: number) => [value.toLocaleString(), 'Quota Used']}
+                    />
+                    <Area type="monotone" dataKey="quota_used" fill="url(#quotaGradient)" stroke="none" />
+                    <Line type="monotone" dataKey="quota_used" stroke="#3b82f6" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -277,7 +289,7 @@ export function ChannelDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Estimated Days Left</p>
-                    <p className="text-2xl font-bold">{forecast.daysLeft} days</p>
+                    <p className={`text-2xl font-bold ${forecast.daysLeft <= 3 ? 'text-rose-600' : forecast.daysLeft <= 7 ? 'text-amber-600' : 'text-emerald-600'}`}>{forecast.daysLeft} days</p>
                   </div>
                 </div>
               ) : (
@@ -338,7 +350,7 @@ export function ChannelDetailPage() {
                     aria-label={`Webhook status: ${channel.webhook_status === 'online' ? 'Online' : channel.webhook_status === 'offline' ? 'Offline' : 'Unknown'}`}
                     className={`w-3 h-3 rounded-full ${
                     channel.webhook_status === 'online'
-                      ? 'bg-green-500'
+                      ? 'bg-green-500 animate-pulse'
                       : channel.webhook_status === 'offline'
                       ? 'bg-red-500'
                       : 'bg-yellow-500'
