@@ -6,7 +6,7 @@
  *   1. ตั้งค่าใน Script Properties (File → Project Properties):
  *      IOTCENTER_API_URL  = https://line-fleetbackend-production.up.railway.app
  *      IOTCENTER_API_KEY  = (จาก IoTcenter Setup → Sources → API Key)
- *      IOTCENTER_DEVICE   = TempBot_ward1
+ *      IOTCENTER_DEVICE   = TempBot_xxx
  *   2. เรียกใช้ IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName)
  */
 var IoTcenter = (function() {
@@ -84,9 +84,6 @@ var IoTcenter = (function() {
 
 // ============================================================
 // CONFIG — ตั้งค่าใน Script Properties (File → Project Properties)
-//   IOTCENTER_API_URL  = https://line-fleetbackend-production.up.railway.app
-//   IOTCENTER_API_KEY  = (จาก IoTcenter Setup → Sources → API Key)
-//   IOTCENTER_DEVICE   = TempBot_ward1
 // ============================================================
 function getIoTcenterConfig() {
   const props = PropertiesService.getScriptProperties();
@@ -101,7 +98,7 @@ function getIoTcenterConfig() {
 // ==========================================
 // การตั้งค่าระบบ (Configuration)
 // ==========================================
-var TARGET_SPREADSHEET_ID = "1cEC6cUDpnCRLXWDzytiIHTtFIXXHuR20RhjXUCvyXF4"; 
+var TARGET_SPREADSHEET_ID = "xxx"; 
 
 var TEMP_COLUMN = 3; // คอลัมน์ C (A=1, B=2, C=3)
 var TEMP_IDX = TEMP_COLUMN - 1; // สำหรับดึงค่าจาก Array (A=0, B=1, C=2)
