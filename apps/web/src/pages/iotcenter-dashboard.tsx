@@ -34,8 +34,9 @@ interface DeviceSummary {
   last_seen: string | null
 }
 
-interface EventSummary {
+interface EventData {
   id: string
+  source_id: string
   event_type: string
   level: string | null
   message: string | null
@@ -50,30 +51,7 @@ interface SourceSummary {
   source_type: { name: string; display_name: string }
   organization: { id: string; name: string }
   devices: DeviceSummary[]
-  events: EventSummary[]
-  last_event: EventSummary | null
-}
-
-interface SourceRaw {
-  id: string
-  name: string
-  active: boolean
-  source_type: { name: string; display_name: string } | { name: string; display_name: string }[]
-  organization: { id: string; name: string } | { id: string; name: string }[]
-  devices: Array<{
-    id: string
-    device_name: string
-    status: string
-    last_seen: string | null
-  }>
-  events: Array<{
-    id: string
-    event_type: string
-    level: string | null
-    message: string | null
-    payload: Record<string, unknown>
-    created_at: string
-  }>
+  last_event: EventData | null
 }
 
 interface TempWidget {
@@ -87,42 +65,97 @@ interface TempWidget {
 
 export function IotcenterDashboardPage() {
   const [sources, setSources] = useState<SourceSummary[]>([])
+  const [tempWidgets, setTempWidgets] = useState<TempWidget[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
       setError(null)
-      const { data, error: fetchError } = await supabase
+
+      const { data: sourcesData, error: sourcesError } = await supabase
         .from('sources')
         .select(`
           id, name, active,
           source_type:source_type_id(name, display_name),
           organization:organization_id(id, name),
-          devices(id, device_name, status, last_seen),
-          events:events(id, event_type, level, message, payload, created_at)
+          devices(id, device_name, status, last_seen)
         `)
         .order('name')
 
-      if (fetchError) throw new Error(fetchError.message)
+      if (sourcesError) throw new Error(sourcesError.message)
 
-      if (data) {
-        setSources((data as SourceRaw[]).map((s) => {
-          const sortedEvents = (s.events || []).sort((a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          )
-          return {
-            id: s.id,
-            name: s.name,
-            active: s.active,
-            source_type: Array.isArray(s.source_type) ? s.source_type[0] : s.source_type,
-            organization: Array.isArray(s.organization) ? s.organization[0] : s.organization,
-            devices: s.devices || [],
-            events: sortedEvents,
-            last_event: sortedEvents[0] ?? null,
-          }
-        }))
+      const srcList: SourceSummary[] = (sourcesData || []).map((s: Record<string, unknown>) => ({
+        id: s.id as string,
+        name: s.name as string,
+        active: s.active as boolean,
+        source_type: (Array.isArray(s.source_type) ? s.source_type[0] : s.source_type) as { name: string; display_name: string },
+        organization: (Array.isArray(s.organization) ? s.organization[0] : s.organization) as { id: string; name: string },
+        devices: (s.devices || []) as DeviceSummary[],
+        last_event: null,
+      }))
+
+      if (srcList.length === 0) {
+        setSources([])
+        setTempWidgets([])
+        setLoading(false)
+        return
       }
+
+      const sourceIds = srcList.map((s) => s.id)
+
+      const { data: allEvents, error: eventsError } = await supabase
+        .from('events')
+        .select('id, source_id, event_type, level, message, payload, created_at')
+        .in('source_id', sourceIds)
+        .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'DAILY_REPORT'])
+        .order('created_at', { ascending: false })
+        .limit(500)
+
+      if (eventsError) throw new Error(eventsError.message)
+
+      const eventsBySource = new Map<string, EventData[]>()
+      for (const ev of (allEvents || []) as EventData[]) {
+        const list = eventsBySource.get(ev.source_id)
+        if (list) list.push(ev)
+        else eventsBySource.set(ev.source_id, [ev])
+      }
+
+      const todayStr = new Date().toLocaleDateString()
+
+      const widgets: TempWidget[] = []
+
+      for (const src of srcList) {
+        const events = eventsBySource.get(src.id)
+        if (!events) continue
+
+        const sorted = events.sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+
+        src.last_event = sorted[0] ?? null
+
+        const tempEvent = events.find(
+          (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+        )
+        if (!tempEvent) continue
+
+        const dailyReport = events.find(
+          (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
+        )
+
+        widgets.push({
+          sourceId: src.id,
+          sourceName: src.name,
+          currentTemp: (tempEvent.payload?.temperature as number) ?? null,
+          todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
+          todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
+          deviceStatus: src.devices.length > 0 ? src.devices[0].status : 'unknown',
+        })
+      }
+
+      setSources(srcList)
+      setTempWidgets(widgets)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')
     } finally {
@@ -151,28 +184,6 @@ export function IotcenterDashboardPage() {
     const key = s.source_type.name
     if (!typeMap.has(key)) typeMap.set(key, [])
     typeMap.get(key)!.push(s)
-  }
-
-  const tempWidgets: TempWidget[] = []
-  for (const s of sources) {
-    const tempEvent = s.events.find(
-      (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
-    )
-    if (!tempEvent) continue
-
-    const todayStr = new Date().toLocaleDateString()
-    const dailyReport = s.events.find(
-      (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
-    )
-
-    tempWidgets.push({
-      sourceId: s.id,
-      sourceName: s.name,
-      currentTemp: (tempEvent.payload?.temperature as number) ?? null,
-      todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
-      todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
-      deviceStatus: s.devices.length > 0 ? s.devices[0].status : 'unknown',
-    })
   }
 
   const deviceStatusBadge = (status: string) => {
