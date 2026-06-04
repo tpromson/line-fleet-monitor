@@ -239,9 +239,7 @@ function ProviderManager() {
 
   const deleteProvider = async (id: string, name: string) => {
     if (!confirm(`Delete "${name}"? This will also delete all channels under it.`)) return
-    setDeletingId(id)
     await supabase.from('providers').delete().eq('id', id)
-    setDeletingId(null)
     load()
   }
 
