@@ -212,6 +212,7 @@ export function IotcenterDashboardPage() {
 
   const getTempColor = (temp: number | null, threshold: number) => {
     if (temp === null) return 'text-muted-foreground'
+    if (temp <= 0) return 'text-sky-500'
     if (temp >= threshold) return 'text-rose-600'
     if (temp >= threshold * 0.9) return 'text-amber-600'
     return 'text-emerald-600'

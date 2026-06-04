@@ -343,7 +343,7 @@ export function IotcenterSourceDetailPage() {
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground mb-1">Current Temperature</p>
               <div className="flex items-baseline gap-1">
-                <span className={`text-2xl font-bold ${currentTemp >= srcThreshold ? 'text-rose-600' : currentTemp >= srcThreshold * 0.9 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                <span className={`text-2xl font-bold ${currentTemp <= 0 ? 'text-sky-500' : currentTemp >= srcThreshold ? 'text-rose-600' : currentTemp >= srcThreshold * 0.9 ? 'text-amber-600' : 'text-emerald-600'}`}>
                   {currentTemp.toFixed(1)}
                 </span>
                 <span className="text-sm text-muted-foreground">°C</span>
