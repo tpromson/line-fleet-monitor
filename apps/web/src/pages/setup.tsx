@@ -497,6 +497,7 @@ function OrgMembersManager() {
 function ChannelManager() {
   const [channels, setChannels] = useState<ChannelRow[]>([])
   const [providers, setProviders] = useState<ProviderRow[]>([])
+  const [channelSearch, setChannelSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -714,13 +715,26 @@ function ChannelManager() {
         </Dialog>
       </CardHeader>
       <CardContent>
+        <Input
+          placeholder="Search channels..."
+          value={channelSearch}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setChannelSearch(e.target.value)}
+          className="mb-3 h-8 text-sm"
+        />
         {loading ? (
           <Skeleton className="h-32 w-full" />
         ) : channels.length === 0 ? (
           <p className="text-center py-4 text-muted-foreground">No channels yet</p>
         ) : (
           <div className="space-y-1">
-            {channels.map((c) => (
+            {channels
+              .filter((c) =>
+                !channelSearch ||
+                c.channel_name.toLowerCase().includes(channelSearch.toLowerCase()) ||
+                c.channel_id.toLowerCase().includes(channelSearch.toLowerCase()) ||
+                c.provider.name.toLowerCase().includes(channelSearch.toLowerCase())
+              )
+              .map((c) => (
               <div key={c.id} className="flex items-center justify-between py-2 border-b last:border-0">
                 <div>
                   <span className="text-sm font-medium">{c.channel_name}</span>
@@ -772,6 +786,7 @@ function SourceManager() {
   const [orgs, setOrgs] = useState<OrgRow[]>([])
   const [sourceTypes, setSourceTypes] = useState<SourceTypeRow[]>([])
   const [channels, setChannels] = useState<Array<{ id: string; channel_name: string; provider: { organization_id: string; name: string } }>>([])
+  const [sourceSearch, setSourceSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -1077,13 +1092,26 @@ function SourceManager() {
         </Dialog>
       </CardHeader>
       <CardContent>
+        <Input
+          placeholder="Search sources..."
+          value={sourceSearch}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setSourceSearch(e.target.value)}
+          className="mb-3 h-8 text-sm"
+        />
         {loading ? (
           <Skeleton className="h-32 w-full" />
         ) : sources.length === 0 ? (
           <p className="text-center py-4 text-muted-foreground">No sources yet</p>
         ) : (
           <div className="space-y-1">
-            {sources.map((s) => (
+            {sources
+              .filter((s) =>
+                !sourceSearch ||
+                s.name.toLowerCase().includes(sourceSearch.toLowerCase()) ||
+                s.organization.name.toLowerCase().includes(sourceSearch.toLowerCase()) ||
+                s.source_type.display_name.toLowerCase().includes(sourceSearch.toLowerCase())
+              )
+              .map((s) => (
               <div key={s.id} className="flex items-center justify-between py-2 border-b last:border-0">
                 <div>
                   <span className="text-sm font-medium">{s.name}</span>
