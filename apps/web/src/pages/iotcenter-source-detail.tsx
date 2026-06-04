@@ -101,6 +101,7 @@ export function IotcenterSourceDetailPage() {
   const [chartRange, setChartRange] = useState<DateRange>('7d')
   const [tempLogs, setTempLogs] = useState<TempLog[]>([])
   const [chartThreshold, setChartThreshold] = useState(10)
+  const [chartMax, setChartMax] = useState(30)
   const [chartLoading, setChartLoading] = useState(false)
   const [eventFilter, setEventFilter] = useState<string>('all')
 
@@ -184,14 +185,17 @@ export function IotcenterSourceDetailPage() {
       : (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
     if (data) {
-      setTempLogs(
-        data
-          .filter((e) => e.payload && typeof (e.payload as Record<string, unknown>).temperature === 'number')
-          .map((e) => ({
-            timestamp: fmt(new Date(e.created_at)),
-            temperature: (e.payload as Record<string, unknown>).temperature as number,
-          }))
-      )
+      const logs = data
+        .filter((e) => e.payload && typeof (e.payload as Record<string, unknown>).temperature === 'number')
+        .map((e) => ({
+          timestamp: fmt(new Date(e.created_at)),
+          temperature: (e.payload as Record<string, unknown>).temperature as number,
+        }))
+      setTempLogs(logs)
+      if (logs.length > 0) {
+        const maxT = Math.ceil(Math.max(...logs.map((l) => l.temperature)) + 5)
+        setChartMax(maxT > srcThreshold + 2 ? maxT : srcThreshold + 2)
+      }
     } else {
       setTempLogs([])
     }
@@ -382,14 +386,14 @@ export function IotcenterSourceDetailPage() {
                 <LineChart data={tempLogs} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
                       <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <ReferenceArea
                     y1={chartThreshold}
-                    y2={999}
+                    y2={chartMax}
                     fill="#fef2f2"
                     stroke="none"
                   />
