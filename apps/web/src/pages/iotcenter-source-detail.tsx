@@ -427,7 +427,6 @@ export function IotcenterSourceDetailPage() {
                     label={{ value: `Threshold ${chartThreshold}°C`, position: 'insideTopRight', fontSize: 11, fill: 'hsl(var(--destructive))' }}
                   />
                   <Line
-                    yAxisId={0}
                     type="linear"
                     dataKey="temperature"
                     stroke="hsl(var(--primary))"
