@@ -58,7 +58,7 @@ export function registerIotcenterRoutes(app: Express) {
       .from('devices')
       .select('id')
       .eq('source_id', source.sourceId)
-      .eq('device_name', device_name)
+      .ilike('device_name', device_name)
       .maybeSingle()
 
     if (existing) {

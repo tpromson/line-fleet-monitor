@@ -36,10 +36,10 @@ function mockSourcesResponse(data: unknown, error: unknown = null) {
 
 function mockDevicesLookup(data: unknown, error: unknown = null) {
   const maybeSingle = vi.fn().mockResolvedValue({ data, error })
-  const eq2 = vi.fn().mockReturnValue({ maybeSingle })
-  const eq1 = vi.fn().mockReturnValue({ eq: eq2, maybeSingle })
-  const select = vi.fn().mockReturnValue({ eq: eq1 })
-  return { select, eq: eq1, maybeSingle }
+  const ilike = vi.fn().mockReturnValue({ maybeSingle })
+  const eq = vi.fn().mockReturnValue({ ilike })
+  const select = vi.fn().mockReturnValue({ eq })
+  return { select, eq, ilike, maybeSingle }
 }
 
 describe('iotcenter routes', () => {
