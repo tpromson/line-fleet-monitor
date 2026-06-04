@@ -331,14 +331,20 @@ export function IotcenterSourceDetailPage() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard icon={<Monitor className="w-4 h-4" />} value={String(devices.length)} label="Total Devices" />
-        <StatCard icon={<CheckCircle className="w-4 h-4" />} value={String(onlineCount)} label="Online" />
-        <StatCard icon={<XCircle className="w-4 h-4" />} value={String(offlineCount)} label="Offline" />
-        <StatCard icon={<AlertTriangle className="w-4 h-4" />} value={String(delayedCount)} label="Delayed" />
+        {[
+          { icon: <Monitor className="w-4 h-4" />, value: String(devices.length), label: 'Total Devices' },
+          { icon: <CheckCircle className="w-4 h-4" />, value: String(onlineCount), label: 'Online' },
+          { icon: <XCircle className="w-4 h-4" />, value: String(offlineCount), label: 'Offline' },
+          { icon: <AlertTriangle className="w-4 h-4" />, value: String(delayedCount), label: 'Delayed' },
+        ].map((stat, i) => (
+          <div key={stat.label} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
+            <StatCard icon={stat.icon} value={stat.value} label={stat.label} />
+          </div>
+        ))}
       </div>
 
       {showTempChart && currentTemp !== null && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-slide-up-fade" style={{ animationDelay: '240ms' }}>
           <Card>
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground mb-1">Current Temperature</p>
@@ -481,8 +487,8 @@ export function IotcenterSourceDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map((d) => (
-                    <tr key={d.id} className="border-t">
+                  {devices.map((d, i) => (
+                    <tr key={d.id} className="border-t animate-slide-up-fade hover:bg-muted/30 transition-colors" style={{ animationDelay: `${i * 50}ms` }}>
                       <td className="py-2 font-medium">{d.device_name}</td>
                       <td className="py-2 text-muted-foreground">{d.device_type}</td>
                       <td className="py-2">{deviceStatusBadge(d.status)}</td>
@@ -536,7 +542,7 @@ export function IotcenterSourceDetailPage() {
                 if (eventFilter === 'heartbeat') return ev.event_type === 'heartbeat'
                 return true
               }).map((ev) => (
-                <div key={ev.id} className="flex items-start gap-3 py-2 border-b last:border-0 text-sm">
+                <div key={ev.id} className="flex items-start gap-3 py-2 border-b last:border-0 text-sm animate-fade-in">
                   <div className="shrink-0 mt-0.5">
                     <Clock className="w-3 h-3 text-muted-foreground" />
                   </div>
