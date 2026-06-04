@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchBackend } from '@/lib/backend-api'
 import { AlertCircle, TrendingUp, Bell, Activity } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 interface QuotaLogRow {
   checked_at: string
@@ -247,24 +247,17 @@ export function ChannelDetailPage() {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dailyLogs}>
-                    <defs>
-                      <linearGradient id="quotaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <BarChart data={dailyLogs}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                     <XAxis dataKey="checked_at" fontSize={11} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} />
                     <YAxis fontSize={12} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={45} />
                     <Tooltip
-                      cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4', strokeWidth: 1 }}
+                      cursor={{ fill: '#f1f5f9' }}
                       contentStyle={{ background: '#fff', border: 'none', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 13, padding: '8px 12px' }}
                       formatter={(value: number) => [value.toLocaleString(), 'Quota Used']}
                     />
-                    <Area type="monotone" dataKey="quota_used" fill="url(#quotaGradient)" stroke="none" />
-                    <Line type="monotone" dataKey="quota_used" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                  </LineChart>
+                    <Bar dataKey="quota_used" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  </BarChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
