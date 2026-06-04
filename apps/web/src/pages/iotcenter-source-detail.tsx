@@ -222,9 +222,10 @@ export function IotcenterSourceDetailPage() {
   const delayedCount = devices.filter((d) => d.status === 'delayed').length
 
   const latestTempEvent = events.find(
-    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
+      (e.event_type === 'heartbeat' && (e.payload?.temperature || e.payload?.lastTemperature))
   )
-  const currentTemp = latestTempEvent ? (latestTempEvent.payload?.temperature as number) ?? null : null
+  const currentTemp = latestTempEvent ? (latestTempEvent.payload?.temperature as number) ?? (latestTempEvent.payload?.lastTemperature as number) ?? null : null
   const srcThreshold = source ? ((source.metadata?.threshold as number) || 10) : 10
 
   const deviceStatusBadge = (status: string) => {

@@ -146,7 +146,8 @@ export function IotcenterDashboardPage() {
         src.last_event = sorted[0] ?? null
 
         const tempEvent = events.find(
-          (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+          (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
+            (e.event_type === 'heartbeat' && (e.payload?.temperature || e.payload?.lastTemperature))
         )
         if (!tempEvent) continue
 
@@ -157,7 +158,7 @@ export function IotcenterDashboardPage() {
     widgets.push({
       sourceId: src.id,
       sourceName: src.name,
-      currentTemp: (tempEvent.payload?.temperature as number) ?? null,
+      currentTemp: (tempEvent.payload?.temperature as number) ?? (tempEvent.payload?.lastTemperature as number) ?? null,
       todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
       todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
       threshold: (src.metadata?.threshold as number) || 10,
