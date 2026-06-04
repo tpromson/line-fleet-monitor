@@ -231,9 +231,9 @@ export function IotcenterDashboardPage() {
             <Thermometer className="w-4 h-4" /> Temperature Overview
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {tempWidgets.map((tw) => (
-              <Link key={tw.sourceId} to={`/iotcenter/sources/${tw.sourceId}`}>
-                <Card className="hover:border-primary/50 transition-colors h-full">
+            {tempWidgets.map((tw, i) => (
+              <Link key={tw.sourceId} to={`/iotcenter/sources/${tw.sourceId}`} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
+                <Card className="hover:border-primary/50 hover:shadow-md hover:scale-[1.02] transition-all duration-150 h-full">
                   <CardContent className="pt-4 pb-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium truncate">{tw.sourceName}</span>
@@ -276,11 +276,17 @@ export function IotcenterDashboardPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard icon={<Plug className="w-4 h-4" />} value={String(totalSources)} label="Sources" />
-          <StatCard icon={<CheckCircle className="w-4 h-4" />} value={onlineDevices + ' / ' + allDevices.length} label="Online Devices" />
-          <StatCard icon={<XCircle className="w-4 h-4" />} value={String(offlineDevices)} label="Offline Devices" warn={offlineDevices > 0} />
-          <StatCard icon={<AlertTriangle className="w-4 h-4" />} value={String(delayedDevices)} label="Delayed" warn={delayedDevices > 0} />
-          <StatCard icon={<Activity className="w-4 h-4" />} value={String(alertCount)} label="Active Alerts" warn={alertCount > 0} />
+          {[
+            { icon: <Plug className="w-4 h-4" />, value: String(totalSources), label: 'Sources' },
+            { icon: <CheckCircle className="w-4 h-4" />, value: onlineDevices + ' / ' + allDevices.length, label: 'Online Devices' },
+            { icon: <XCircle className="w-4 h-4" />, value: String(offlineDevices), label: 'Offline Devices', warn: offlineDevices > 0 },
+            { icon: <AlertTriangle className="w-4 h-4" />, value: String(delayedDevices), label: 'Delayed', warn: delayedDevices > 0 },
+            { icon: <Activity className="w-4 h-4" />, value: String(alertCount), label: 'Active Alerts', warn: alertCount > 0 },
+          ].map((stat, i) => (
+            <div key={stat.label} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
+              <StatCard icon={stat.icon} value={stat.value} label={stat.label} warn={stat.warn} />
+            </div>
+          ))}
         </div>
       )}
 
@@ -298,9 +304,9 @@ export function IotcenterDashboardPage() {
         <div>
           <button
             onClick={() => setCollapsedSources(!collapsedSources)}
-            className="flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground mb-3 w-full text-left"
+            className="flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground mb-3 w-full text-left transition-colors duration-150"
           >
-            {collapsedSources ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {collapsedSources ? <ChevronRight className="w-4 h-4 transition-transform duration-200" /> : <ChevronDown className="w-4 h-4 transition-transform duration-200" />}
             All Sources ({sources.length})
           </button>
           {!collapsedSources && (
@@ -317,7 +323,7 @@ export function IotcenterDashboardPage() {
                           to={`/iotcenter/sources/${source.id}`}
                           className="block"
                         >
-                          <Card className="hover:border-primary/50 transition-colors">
+                          <Card className="hover:border-primary/50 hover:shadow-sm hover:scale-[1.01] transition-all duration-150">
                             <CardContent className="py-3 px-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex-1 min-w-0">

@@ -382,6 +382,7 @@ export function IotcenterSourceDetailPage() {
             ) : tempLogs.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground text-sm">No temperature data for this period</p>
             ) : (
+              <div className="animate-fade-in">
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={tempLogs} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                   <defs>
@@ -457,6 +458,7 @@ export function IotcenterSourceDetailPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
