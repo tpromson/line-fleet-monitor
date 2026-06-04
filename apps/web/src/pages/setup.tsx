@@ -498,6 +498,8 @@ function ChannelManager() {
   const [channels, setChannels] = useState<ChannelRow[]>([])
   const [providers, setProviders] = useState<ProviderRow[]>([])
   const [channelSearch, setChannelSearch] = useState('')
+  const [channelOrgFilter, setChannelOrgFilter] = useState('')
+  const [channelOrgs, setChannelOrgs] = useState<OrgRow[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -509,9 +511,10 @@ function ChannelManager() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [chsRes, provsRes] = await Promise.all([
+    const [chsRes, provsRes, orgsRes] = await Promise.all([
       supabase.from('channels').select('id, channel_name, channel_id, quota_limit, active, provider:provider_id(id, name)').order('channel_name'),
       supabase.from('providers').select('id, name, organization:organization_id(id, name)').order('name'),
+      supabase.from('organizations').select('id, name').order('name'),
     ])
 
     if (chsRes.data) {
@@ -535,6 +538,7 @@ function ChannelManager() {
         }))
       )
     }
+    if (orgsRes.data) setChannelOrgs(orgsRes.data)
     setLoading(false)
   }, [])
 
@@ -715,12 +719,24 @@ function ChannelManager() {
         </Dialog>
       </CardHeader>
       <CardContent>
-        <Input
+        <div className="flex gap-2 mb-3">
+          <select
+            value={channelOrgFilter}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => setChannelOrgFilter(e.target.value)}
+            className="border rounded-md px-2 py-1 text-xs bg-background h-8 w-40"
+          >
+            <option value="">All Orgs</option>
+            {channelOrgs.map((org) => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
+          <Input
           placeholder="Search channels..."
           value={channelSearch}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setChannelSearch(e.target.value)}
-          className="mb-3 h-8 text-sm"
+          className="h-8 text-sm flex-1"
         />
+        </div>
         {loading ? (
           <Skeleton className="h-32 w-full" />
         ) : channels.length === 0 ? (
@@ -728,12 +744,16 @@ function ChannelManager() {
         ) : (
           <div className="space-y-1">
             {channels
-              .filter((c) =>
-                !channelSearch ||
-                c.channel_name.toLowerCase().includes(channelSearch.toLowerCase()) ||
-                c.channel_id.toLowerCase().includes(channelSearch.toLowerCase()) ||
-                c.provider.name.toLowerCase().includes(channelSearch.toLowerCase())
-              )
+              .filter((c) => {
+                if (channelOrgFilter) {
+                  const prov = providers.find((p) => p.id === c.provider.id)
+                  if (!prov || prov.organization.id !== channelOrgFilter) return false
+                }
+                if (!channelSearch) return true
+                return c.channel_name.toLowerCase().includes(channelSearch.toLowerCase()) ||
+                  c.channel_id.toLowerCase().includes(channelSearch.toLowerCase()) ||
+                  c.provider.name.toLowerCase().includes(channelSearch.toLowerCase())
+              })
               .map((c) => (
               <div key={c.id} className="flex items-center justify-between py-2 border-b last:border-0">
                 <div>
@@ -787,6 +807,7 @@ function SourceManager() {
   const [sourceTypes, setSourceTypes] = useState<SourceTypeRow[]>([])
   const [channels, setChannels] = useState<Array<{ id: string; channel_name: string; provider: { organization_id: string; name: string } }>>([])
   const [sourceSearch, setSourceSearch] = useState('')
+  const [sourceOrgFilter, setSourceOrgFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -1098,19 +1119,38 @@ function SourceManager() {
           onChange={(e: ChangeEvent<HTMLInputElement>) => setSourceSearch(e.target.value)}
           className="mb-3 h-8 text-sm"
         />
-        {loading ? (
+          <div className="flex gap-2 mb-3">
+            <select
+              value={sourceOrgFilter}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setSourceOrgFilter(e.target.value)}
+              className="border rounded-md px-2 py-1 text-xs bg-background h-8 w-40"
+            >
+              <option value="">All Orgs</option>
+              {orgs.map((org) => (
+                <option key={org.id} value={org.id}>{org.name}</option>
+              ))}
+            </select>
+            <Input
+            placeholder="Search sources..."
+            value={sourceSearch}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setSourceSearch(e.target.value)}
+            className="h-8 text-sm flex-1"
+          />
+          </div>
+          {loading ? (
           <Skeleton className="h-32 w-full" />
         ) : sources.length === 0 ? (
           <p className="text-center py-4 text-muted-foreground">No sources yet</p>
         ) : (
           <div className="space-y-1">
             {sources
-              .filter((s) =>
-                !sourceSearch ||
-                s.name.toLowerCase().includes(sourceSearch.toLowerCase()) ||
-                s.organization.name.toLowerCase().includes(sourceSearch.toLowerCase()) ||
-                s.source_type.display_name.toLowerCase().includes(sourceSearch.toLowerCase())
-              )
+              .filter((s) => {
+                if (sourceOrgFilter && s.organization.id !== sourceOrgFilter) return false
+                if (!sourceSearch) return true
+                return s.name.toLowerCase().includes(sourceSearch.toLowerCase()) ||
+                  s.organization.name.toLowerCase().includes(sourceSearch.toLowerCase()) ||
+                  s.source_type.display_name.toLowerCase().includes(sourceSearch.toLowerCase())
+              })
               .map((s) => (
               <div key={s.id} className="flex items-center justify-between py-2 border-b last:border-0">
                 <div>
