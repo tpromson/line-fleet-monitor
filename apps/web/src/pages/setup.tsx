@@ -770,7 +770,7 @@ function SourceManager() {
   const [sources, setSources] = useState<SourceRow[]>([])
   const [orgs, setOrgs] = useState<OrgRow[]>([])
   const [sourceTypes, setSourceTypes] = useState<SourceTypeRow[]>([])
-  const [channels, setChannels] = useState<Array<{ id: string; channel_name: string; provider: { organization_id: string; name: string } | { organization_id: string; name: string }[] }>>([])
+  const [channels, setChannels] = useState<Array<{ id: string; channel_name: string; provider: { organization_id: string; name: string } }>>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
