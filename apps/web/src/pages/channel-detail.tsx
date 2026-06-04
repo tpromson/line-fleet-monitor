@@ -131,12 +131,16 @@ export function ChannelDetailPage() {
         .order('checked_at', { ascending: true })
 
       if (logs) {
-        setDailyLogs(
-          logs.map((l) => ({
-            checked_at: new Date(l.checked_at).toLocaleDateString(),
-            quota_used: l.quota_used,
-          }))
-        )
+        const daily: DailyLog[] = []
+        for (let i = 0; i < logs.length; i++) {
+          const prev = i > 0 ? (logs[i - 1].quota_used || 0) : 0
+          const used = (logs[i].quota_used || 0) - prev
+          daily.push({
+            checked_at: new Date(logs[i].checked_at).toLocaleDateString(),
+            quota_used: used > 0 ? used : (logs[i].quota_used || 0),
+          })
+        }
+        setDailyLogs(daily)
       }
 
       setLoading(false)
