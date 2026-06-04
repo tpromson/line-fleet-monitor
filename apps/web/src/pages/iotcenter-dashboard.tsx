@@ -67,6 +67,7 @@ interface TempWidget {
 export function IotcenterDashboardPage() {
   const [sources, setSources] = useState<SourceSummary[]>([])
   const [tempWidgets, setTempWidgets] = useState<TempWidget[]>([])
+  const [loading, setLoading] = useState(true)
   const [collapsedSources, setCollapsedSources] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
