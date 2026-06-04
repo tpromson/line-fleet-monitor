@@ -936,7 +936,11 @@ function SourceManager() {
                 <select
                   id="src-channel"
                   value={channelId}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setChannelId(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                    setChannelId(e.target.value)
+                    const ch = channels.find((c) => c.id === e.target.value)
+                    if (ch && !name) setName(ch.channel_name)
+                  }}
                   disabled={!orgId}
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background"
                 >
@@ -997,7 +1001,11 @@ function SourceManager() {
                 <select
                   id="edit-src-channel"
                   value={editChannelId}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setEditChannelId(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                    setEditChannelId(e.target.value)
+                    const ch = channels.find((c) => c.id === e.target.value)
+                    if (ch) setEditName(ch.channel_name)
+                  }}
                   disabled={!editOrgId}
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background"
                 >
