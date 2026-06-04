@@ -63,6 +63,7 @@ interface TempWidget {
   currentTemp: number | null
   todayMax: number | null
   todayMin: number | null
+  todayAvg: number | null
   threshold: number
   deviceStatus: string
 }
@@ -155,12 +156,21 @@ export function IotcenterDashboardPage() {
           (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
         )
 
+        const todayTemps = events
+          .filter((e) => new Date(e.created_at).toLocaleDateString() === todayStr)
+          .map((e) => (e.payload?.temperature as number) ?? (e.payload?.lastTemperature as number))
+          .filter((t) => typeof t === 'number')
+        const realtimeMax = todayTemps.length > 0 ? Math.max(...todayTemps) : null
+        const realtimeMin = todayTemps.length > 0 ? Math.min(...todayTemps) : null
+        const realtimeAvg = todayTemps.length > 0 ? todayTemps.reduce((a, b) => a + b, 0) / todayTemps.length : null
+
     widgets.push({
       sourceId: src.id,
       sourceName: src.name,
       currentTemp: (tempEvent.payload?.temperature as number) ?? (tempEvent.payload?.lastTemperature as number) ?? null,
-      todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
-      todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
+      todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? realtimeMax : realtimeMax,
+      todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? realtimeMin : realtimeMin,
+      todayAvg: dailyReport ? (dailyReport.payload?.avgTemp as number) ?? realtimeAvg : realtimeAvg,
       threshold: (src.metadata?.threshold as number) || 10,
       deviceStatus: src.devices.length > 0 ? src.devices[0].status : 'unknown',
     })
@@ -320,6 +330,9 @@ export function IotcenterDashboardPage() {
                       </span>
                       <span>
                         🔻 {tw.todayMin !== null ? tw.todayMin.toFixed(1) + '°C' : '-'}
+                      </span>
+                      <span>
+                        ▸ {tw.todayAvg !== null ? tw.todayAvg.toFixed(1) + '°C' : '-'}
                       </span>
                     </div>
                   </CardContent>
