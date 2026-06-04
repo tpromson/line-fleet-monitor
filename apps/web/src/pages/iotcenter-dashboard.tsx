@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer } from 'lucide-react'
+import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer, Snowflake } from 'lucide-react'
 import { formatTimestamp } from '@/lib/labels'
 
 interface StatCardProps {
@@ -282,15 +282,27 @@ export function IotcenterDashboardPage() {
         <div className="mb-6">
           <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
             <Thermometer className="w-4 h-4" /> Temperature Overview
+            {filteredWidgets.every((tw) => tw.currentTemp !== null && tw.currentTemp < tw.threshold) && (
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">All Clear</span>
+            )}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filteredWidgets.map((tw, i) => (
               <Link key={tw.sourceId} to={`/iotcenter/sources/${tw.sourceId}`} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
-                <Card className="hover:border-primary/50 hover:shadow-md hover:scale-[1.02] transition-all duration-150 h-full">
+                <Card className={`hover:border-primary/50 hover:shadow-md hover:scale-[1.02] transition-all duration-150 h-full ${
+                  tw.currentTemp !== null && tw.currentTemp < tw.threshold && tw.currentTemp > 0
+                    ? 'ring-1 ring-emerald-200/50'
+                    : ''
+                }`}>
                   <CardContent className="pt-4 pb-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium truncate">{tw.sourceName}</span>
-                      {deviceStatusBadge(tw.deviceStatus)}
+                      <div className="flex items-center gap-1">
+                        {tw.currentTemp !== null && tw.currentTemp <= 0 && (
+                          <Snowflake className="w-3.5 h-3.5 text-sky-400" />
+                        )}
+                        {deviceStatusBadge(tw.deviceStatus)}
+                      </div>
                     </div>
                     <div className="flex items-baseline gap-1 mb-1">
                       <span className={`text-2xl font-bold ${getTempColor(tw.currentTemp, tw.threshold)}`}>
@@ -330,13 +342,13 @@ export function IotcenterDashboardPage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
-            { icon: <Plug className="w-4 h-4" />, value: String(totalSources), label: 'Sources' },
-            { icon: <CheckCircle className="w-4 h-4" />, value: onlineDevices + ' / ' + allDevices.length, label: 'Online Devices' },
-            { icon: <XCircle className="w-4 h-4" />, value: String(offlineDevices), label: 'Offline Devices', warn: offlineDevices > 0 },
-            { icon: <AlertTriangle className="w-4 h-4" />, value: String(delayedDevices), label: 'Delayed', warn: delayedDevices > 0 },
-            { icon: <Activity className="w-4 h-4" />, value: String(alertCount), label: 'Active Alerts', warn: alertCount > 0 },
+            { icon: <Plug className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(totalSources), label: 'Sources' },
+            { icon: <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: onlineDevices + ' / ' + allDevices.length, label: 'Online Devices' },
+            { icon: <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(offlineDevices), label: 'Offline Devices', warn: offlineDevices > 0 },
+            { icon: <AlertTriangle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(delayedDevices), label: 'Delayed', warn: delayedDevices > 0 },
+            { icon: <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(alertCount), label: 'Active Alerts', warn: alertCount > 0 },
           ].map((stat, i) => (
-            <div key={stat.label} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
+            <div key={stat.label} className="animate-slide-up-fade group" style={{ animationDelay: `${i * 60}ms` }}>
               <StatCard icon={stat.icon} value={stat.value} label={stat.label} warn={stat.warn} />
             </div>
           ))}
@@ -350,7 +362,7 @@ export function IotcenterDashboardPage() {
       ) : filteredSources.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No sources configured yet. Add sources from the Setup page.
+            No sources yet — ready to start monitoring. Add your first sensor from the Setup page.
           </CardContent>
         </Card>
       ) : (
