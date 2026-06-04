@@ -118,9 +118,9 @@ export function IotcenterDashboardPage() {
         .from('events')
         .select('id, source_id, event_type, level, message, payload, created_at')
         .in('source_id', sourceIds)
-        .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'DAILY_REPORT'])
+        .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'DAILY_REPORT', 'heartbeat'])
         .order('created_at', { ascending: false })
-        .limit(500)
+        .limit(1000)
 
       if (eventsError) throw new Error(eventsError.message)
 
