@@ -761,6 +761,7 @@ interface SourceRow {
   id: string
   name: string
   active: boolean
+  channel_id?: string | null
   organization: { id: string; name: string }
   source_type: { id: string; name: string; display_name: string }
 }
@@ -769,11 +770,13 @@ function SourceManager() {
   const [sources, setSources] = useState<SourceRow[]>([])
   const [orgs, setOrgs] = useState<OrgRow[]>([])
   const [sourceTypes, setSourceTypes] = useState<SourceTypeRow[]>([])
+  const [channels, setChannels] = useState<Array<{ id: string; channel_name: string; provider: { organization_id: string; name: string } | { organization_id: string; name: string }[] }>>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [orgId, setOrgId] = useState('')
   const [typeId, setTypeId] = useState('')
+  const [channelId, setChannelId] = useState('')
   const [createError, setCreateError] = useState('')
   const [saving, setSaving] = useState(false)
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
@@ -784,14 +787,16 @@ function SourceManager() {
   const [editName, setEditName] = useState('')
   const [editOrgId, setEditOrgId] = useState('')
   const [editTypeId, setEditTypeId] = useState('')
+  const [editChannelId, setEditChannelId] = useState('')
   const [editError, setEditError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [srcRes, orgsRes, typesRes] = await Promise.all([
-      supabase.from('sources').select('id, name, active, organization:organization_id(id, name), source_type:source_type_id(id, name, display_name)').order('name'),
+    const [srcRes, orgsRes, typesRes, chsRes] = await Promise.all([
+      supabase.from('sources').select('id, name, active, channel_id, organization:organization_id(id, name), source_type:source_type_id(id, name, display_name)').order('name'),
       supabase.from('organizations').select('id, name, created_at').order('name'),
       supabase.from('source_types').select('id, name, display_name').order('name'),
+      supabase.from('channels').select('id, channel_name, provider:provider_id(organization_id, name)').eq('active', true).order('channel_name'),
     ])
 
     if (srcRes.data) {
@@ -800,6 +805,7 @@ function SourceManager() {
           id: s.id,
           name: s.name,
           active: s.active,
+          channel_id: s.channel_id ?? null,
           organization: Array.isArray(s.organization) ? s.organization[0] : s.organization,
           source_type: Array.isArray(s.source_type) ? s.source_type[0] : s.source_type,
         }))
@@ -807,6 +813,14 @@ function SourceManager() {
     }
     if (orgsRes.data) setOrgs(orgsRes.data)
     if (typesRes.data) setSourceTypes(typesRes.data)
+    if (chsRes.data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase nested response typing
+      setChannels((chsRes.data as any[]).map((ch) => ({
+        id: ch.id,
+        channel_name: ch.channel_name,
+        provider: Array.isArray(ch.provider) ? ch.provider[0] : ch.provider,
+      })))
+    }
     setLoading(false)
   }, [])
 
@@ -821,10 +835,12 @@ function SourceManager() {
       organization_id: orgId,
       source_type_id: typeId,
       name: name.trim(),
+      channel_id: channelId || null,
     })
     if (err) { setCreateError(err.message); setSaving(false); return }
     setName('')
     setOpen(false)
+
     setCreateError('')
     setSaving(false)
     load()
@@ -862,6 +878,7 @@ function SourceManager() {
     setEditName(s.name)
     setEditOrgId(s.organization.id)
     setEditTypeId(s.source_type.id)
+    setEditChannelId(s.channel_id || '')
     setEditError('')
     setEditOpen(true)
   }
@@ -873,6 +890,7 @@ function SourceManager() {
       name: editName.trim(),
       organization_id: editOrgId,
       source_type_id: editTypeId,
+      channel_id: editChannelId || null,
       updated_at: new Date().toISOString(),
     }).eq('id', editingId)
     if (err) { setEditError(err.message); return }
@@ -904,12 +922,27 @@ function SourceManager() {
                 <select
                   id="src-org"
                   value={orgId}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setOrgId(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => { setOrgId(e.target.value); setChannelId('') }}
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background"
                 >
                   <option value="">Select...</option>
                   {orgs.map((org) => (
                     <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="src-channel">Channel (optional)</Label>
+                <select
+                  id="src-channel"
+                  value={channelId}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setChannelId(e.target.value)}
+                  disabled={!orgId}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">None</option>
+                  {channels.filter((ch) => !orgId || ch.provider?.organization_id === orgId).map((ch) => (
+                    <option key={ch.id} value={ch.id}>{ch.channel_name}</option>
                   ))}
                 </select>
               </div>
@@ -950,12 +983,27 @@ function SourceManager() {
                 <select
                   id="edit-src-org"
                   value={editOrgId}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setEditOrgId(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => { setEditOrgId(e.target.value); setEditChannelId('') }}
                   className="w-full border rounded-md px-3 py-2 text-sm bg-background"
                 >
                   <option value="">Select...</option>
                   {orgs.map((org) => (
                     <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-src-channel">Channel (optional)</Label>
+                <select
+                  id="edit-src-channel"
+                  value={editChannelId}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setEditChannelId(e.target.value)}
+                  disabled={!editOrgId}
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">None</option>
+                  {channels.filter((ch) => !editOrgId || ch.provider?.organization_id === editOrgId).map((ch) => (
+                    <option key={ch.id} value={ch.id}>{ch.channel_name}</option>
                   ))}
                 </select>
               </div>
@@ -1006,6 +1054,7 @@ function SourceManager() {
                   <span className="text-sm font-medium">{s.name}</span>
                   <p className="text-xs text-muted-foreground">
                     {s.organization.name} &middot; {s.source_type.display_name}
+                    {s.channel_id && ` · ${channels.find((ch) => ch.id === s.channel_id)?.channel_name ?? 'Channel'}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
