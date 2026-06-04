@@ -76,7 +76,7 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-  const [compact, setCompact] = useState(true)
+  const [compact, setCompact] = useState(false)
   const [collapsedOrgs, setCollapsedOrgs] = useState<Set<string>>(new Set())
 
   const lastSyncTime = providers
@@ -209,7 +209,7 @@ export function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setCompact(!compact)}>
-            {compact ? 'Expand All' : 'Compact'}
+            {compact ? 'Compact' : 'Expand All'}
           </Button>
           {isSuperAdmin && (
             <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
