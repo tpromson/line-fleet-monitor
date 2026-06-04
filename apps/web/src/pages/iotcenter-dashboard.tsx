@@ -221,7 +221,7 @@ export function IotcenterDashboardPage() {
     switch (status) {
       case 'online': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200">Online</Badge>
       case 'delayed': return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200">Delayed</Badge>
-      case 'offline': return <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-200 border-rose-200">Offline</Badge>
+      case 'offline': return <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-200 border-rose-200 animate-pulse">Offline</Badge>
       default: return <Badge variant="outline">Unknown</Badge>
     }
   }
@@ -290,7 +290,11 @@ export function IotcenterDashboardPage() {
             {filteredWidgets.map((tw, i) => (
               <Link key={tw.sourceId} to={`/iotcenter/sources/${tw.sourceId}`} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
                 <Card className={`hover:border-primary/50 hover:shadow-md hover:scale-[1.02] transition-all duration-150 h-full ${
-                  tw.currentTemp !== null && tw.currentTemp < tw.threshold && tw.currentTemp > 0
+                  tw.currentTemp !== null && tw.currentTemp >= tw.threshold
+                    ? 'ring-1 ring-rose-200/70'
+                    : tw.currentTemp !== null && tw.currentTemp >= tw.threshold * 0.9
+                    ? 'ring-1 ring-amber-200/70'
+                    : tw.currentTemp !== null && tw.currentTemp > 0
                     ? 'ring-1 ring-emerald-200/50'
                     : ''
                 }`}>
@@ -342,13 +346,13 @@ export function IotcenterDashboardPage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
-            { icon: <Plug className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(totalSources), label: 'Sources' },
-            { icon: <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: onlineDevices + ' / ' + allDevices.length, label: 'Online Devices' },
-            { icon: <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(offlineDevices), label: 'Offline Devices', warn: offlineDevices > 0 },
-            { icon: <AlertTriangle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(delayedDevices), label: 'Delayed', warn: delayedDevices > 0 },
-            { icon: <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(alertCount), label: 'Active Alerts', warn: alertCount > 0 },
+            { icon: <Plug className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(totalSources), label: 'Sources', border: 'border-l-2 border-l-slate-300' },
+            { icon: <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: onlineDevices + ' / ' + allDevices.length, label: 'Online Devices', border: 'border-l-2 border-l-emerald-400' },
+            { icon: <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(offlineDevices), label: 'Offline Devices', warn: offlineDevices > 0, border: offlineDevices > 0 ? 'border-l-2 border-l-rose-400' : 'border-l-2 border-l-slate-200' },
+            { icon: <AlertTriangle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(delayedDevices), label: 'Delayed', warn: delayedDevices > 0, border: delayedDevices > 0 ? 'border-l-2 border-l-amber-400' : 'border-l-2 border-l-slate-200' },
+            { icon: <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(alertCount), label: 'Active Alerts', warn: alertCount > 0, border: alertCount > 0 ? 'border-l-2 border-l-rose-400' : 'border-l-2 border-l-slate-200' },
           ].map((stat, i) => (
-            <div key={stat.label} className="animate-slide-up-fade group" style={{ animationDelay: `${i * 60}ms` }}>
+            <div key={stat.label} className={`animate-slide-up-fade group ${stat.border}`} style={{ animationDelay: `${i * 60}ms` }}>
               <StatCard icon={stat.icon} value={stat.value} label={stat.label} warn={stat.warn} />
             </div>
           ))}

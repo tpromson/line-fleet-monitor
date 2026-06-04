@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchBackend } from '@/lib/backend-api'
 import { AlertCircle, TrendingUp, Bell, Activity } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 
 interface QuotaLogRow {
   checked_at: string
@@ -203,13 +203,13 @@ export function ChannelDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
+        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150 border-l-2 border-l-emerald-400">
           <CardContent className="pt-6">
             <div className="text-xl font-bold">{channel.quota_limit.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Quota Limit</p>
           </CardContent>
         </Card>
-        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
+        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150 border-l-2 border-l-sky-400">
           <CardContent className="pt-6">
             <div className="text-xl font-bold">
               {channel.latest_log ? channel.latest_log.quota_used.toLocaleString() : '-'}
@@ -217,7 +217,7 @@ export function ChannelDetailPage() {
             <p className="text-xs text-muted-foreground">Used</p>
           </CardContent>
         </Card>
-        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
+        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150 border-l-2 border-l-indigo-400">
           <CardContent className="pt-6">
             <div className="text-xl font-bold">
               {channel.latest_log && !channel.latest_log.error
@@ -227,7 +227,7 @@ export function ChannelDetailPage() {
             <p className="text-xs text-muted-foreground">Remaining</p>
           </CardContent>
         </Card>
-        <Card className="hover:shadow-md hover:scale-[1.02] transition-all duration-150">
+        <Card className={`hover:shadow-md hover:scale-[1.02] transition-all duration-150 border-l-2 ${usagePct >= 95 ? 'border-l-rose-400' : usagePct >= 80 ? 'border-l-amber-400' : 'border-l-emerald-400'}`}>
           <CardContent className="pt-6">
             <div className={`text-xl font-bold ${usagePct >= 95 ? 'text-rose-600' : usagePct >= 80 ? 'text-amber-600' : 'text-emerald-600'}`}>{usagePct.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">Usage</p>
@@ -265,7 +265,18 @@ export function ChannelDetailPage() {
                       contentStyle={{ background: '#fff', border: 'none', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 13, padding: '8px 12px' }}
                       formatter={(value: number) => [value.toLocaleString(), 'Quota Used']}
                     />
-                    <Bar dataKey="quota_used" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="quota_used" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                      {dailyLogs.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={
+                            entry.quota_used >= 80 ? '#f43f5e' :
+                            entry.quota_used >= 50 ? '#f59e0b' :
+                            '#10b981'
+                          }
+                        />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -339,7 +350,11 @@ export function ChannelDetailPage() {
         </TabsContent>
 
         <TabsContent value="webhook" className="mt-4">
-          <Card>
+          <Card className={`${
+            channel.webhook_status === 'online' ? 'bg-emerald-50/50' :
+            channel.webhook_status === 'offline' ? 'bg-rose-50/50' :
+            'bg-amber-50/50'
+          }`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle>Webhook Status</CardTitle>
               <WebhookTestButton channelId={channel.id} />
