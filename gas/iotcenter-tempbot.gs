@@ -3,7 +3,11 @@
  * ส่ง events และ heartbeat ไปยัง IoTcenter API
  *
  * วิธีใช้:
- *   IoTcenter.init(CONFIG.apiUrl, CONFIG.apiKey, CONFIG.deviceName)
+ *   1. ตั้งค่าใน Script Properties (File → Project Properties):
+ *      IOTCENTER_API_URL  = https://line-fleetbackend-production.up.railway.app
+ *      IOTCENTER_API_KEY  = (จาก IoTcenter Setup → Sources → API Key)
+ *      IOTCENTER_DEVICE   = TempBot_ward1
+ *   2. เรียกใช้ IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName)
  */
 var IoTcenter = (function() {
   'use strict';
@@ -79,14 +83,20 @@ var IoTcenter = (function() {
 })();
 
 // ============================================================
-// CONFIG — แก้ไข API Key จาก Setup → Sources → API Key
+// CONFIG — ตั้งค่าใน Script Properties (File → Project Properties)
+//   IOTCENTER_API_URL  = https://line-fleetbackend-production.up.railway.app
+//   IOTCENTER_API_KEY  = (จาก IoTcenter Setup → Sources → API Key)
+//   IOTCENTER_DEVICE   = TempBot_ward1
 // ============================================================
-var CONFIG = {
-  apiUrl: 'https://line-fleetbackend-production.up.railway.app',
-  apiKey: 'd77b962c-da7f-44a0-8ef5-9db80fb14e03',
-  deviceName: 'TempBot_ward1',
-  deviceType: 'google_apps_script'
-};
+function getIoTcenterConfig() {
+  const props = PropertiesService.getScriptProperties();
+  return {
+    apiUrl: props.getProperty('IOTCENTER_API_URL') || 'https://line-fleetbackend-production.up.railway.app',
+    apiKey: props.getProperty('IOTCENTER_API_KEY') || '',
+    deviceName: props.getProperty('IOTCENTER_DEVICE') || 'TempBot',
+    deviceType: 'google_apps_script'
+  };
+}
 
 // ==========================================
 // การตั้งค่าระบบ (Configuration)
@@ -103,13 +113,14 @@ var MIN_PLAUSIBLE_TEMP = -10;
 // บอก IoTcenter ว่า Bot ยังทำงานอยู่
 // ==========================================
 function heartbeat() {
-  IoTcenter.init(CONFIG.apiUrl, CONFIG.apiKey, CONFIG.deviceName, CONFIG.deviceType);
+  var iotCfg = getIoTcenterConfig();
+  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
 
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
   var lastTemp = lastRow >= 2 ? sheet.getRange(lastRow, TEMP_COLUMN).getValue() : null;
 
-  IoTcenter.sendHeartbeat(CONFIG.deviceName, CONFIG.deviceType, {
+  IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, {
     lastTemperature: lastTemp,
     lastRow: lastRow
   });
@@ -165,7 +176,8 @@ function pushMessage(text) {
 // ฟังก์ชันเช็คสถานะ Sensor (รันทุกๆ 30-40 นาที)
 // ==========================================
 function checkSensorStatus() {
-  IoTcenter.init(CONFIG.apiUrl, CONFIG.apiKey, CONFIG.deviceName, CONFIG.deviceType);
+  var iotCfg = getIoTcenterConfig();
+  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
 
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
@@ -233,7 +245,8 @@ function checkSensorStatus() {
 // 1. แจ้งเตือนเมื่ออุณหภูมิเกิน (Alert)
 // ==========================================
 function checkTemperatureAlert() {
-  IoTcenter.init(CONFIG.apiUrl, CONFIG.apiKey, CONFIG.deviceName, CONFIG.deviceType);
+  var iotCfg = getIoTcenterConfig();
+  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
 
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
@@ -276,7 +289,8 @@ function checkTemperatureAlert() {
 // 2. ฟังก์ชันส่งรายงานสรุปประจำวัน
 // ==========================================
 function sendDailySummary() {
-  IoTcenter.init(CONFIG.apiUrl, CONFIG.apiKey, CONFIG.deviceName, CONFIG.deviceType);
+  var iotCfg = getIoTcenterConfig();
+  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
 
   var sheet = getTargetSheet();
   var data = sheet.getDataRange().getValues();
@@ -358,7 +372,8 @@ function sendReport_16_00() {
 }
 
 function generateReport(startHour, endHour, periodName, daysOffset) {
-  IoTcenter.init(CONFIG.apiUrl, CONFIG.apiKey, CONFIG.deviceName, CONFIG.deviceType);
+  var iotCfg = getIoTcenterConfig();
+  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
 
   var sheet = getTargetSheet();
   var data = sheet.getDataRange().getValues();
