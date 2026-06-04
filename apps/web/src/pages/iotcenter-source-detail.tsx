@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { humanLabel, formatPayloadValue } from '@/lib/labels'
 
 interface DeviceSummary {
   id: string
@@ -94,7 +95,9 @@ export function IotcenterSourceDetailPage() {
 
   const [chartRange, setChartRange] = useState<DateRange>('7d')
   const [tempLogs, setTempLogs] = useState<TempLog[]>([])
+  const [chartThreshold, setChartThreshold] = useState(10)
   const [chartLoading, setChartLoading] = useState(false)
+  const [eventFilter, setEventFilter] = useState<string>('all')
 
   const load = useCallback(async () => {
     if (!id) return
@@ -167,18 +170,32 @@ export function IotcenterSourceDetailPage() {
       .gte('created_at', since.toISOString())
       .order('created_at', { ascending: true })
 
+    const fmt: (d: Date) => string = range === '1d'
+      ? (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : range === '30d'
+      ? (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      : (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    let threshold = 0
+
     if (data) {
       setTempLogs(
         data
           .filter((e) => e.payload && typeof (e.payload as Record<string, unknown>).temperature === 'number')
-          .map((e) => ({
-            timestamp: new Date(e.created_at).toLocaleString(),
-            temperature: (e.payload as Record<string, unknown>).temperature as number,
-          }))
+          .map((e) => {
+            const th = (e.payload as Record<string, unknown>).threshold as number
+            if (th && th > threshold) threshold = th
+            return {
+              timestamp: fmt(new Date(e.created_at)),
+              temperature: (e.payload as Record<string, unknown>).temperature as number,
+            }
+          })
       )
     } else {
       setTempLogs([])
     }
+
+    setChartThreshold(threshold || 10)
     setChartLoading(false)
   }, [id])
 
@@ -333,14 +350,19 @@ export function IotcenterSourceDetailPage() {
                 <LineChart data={tempLogs}>
                   <XAxis
                     dataKey="timestamp"
-                    fontSize={12}
-                    tick={{ fontSize: 11 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
+                    fontSize={11}
+                    tick={{ fontSize: 10 }}
+                    interval="preserveStartEnd"
                   />
                   <YAxis fontSize={12} unit="°C" />
                   <Tooltip />
+                  <ReferenceLine
+                    y={chartThreshold}
+                    stroke="hsl(var(--destructive))"
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                    label={{ value: `${chartThreshold}°C`, position: 'right', fontSize: 11, fill: 'hsl(var(--destructive))' }}
+                  />
                   <Line
                     type="monotone"
                     dataKey="temperature"
@@ -390,15 +412,43 @@ export function IotcenterSourceDetailPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Recent Events</CardTitle>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium">Recent Events</CardTitle>
+            <div className="flex items-center gap-1">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'alert', label: 'Alerts' },
+                { key: 'temp', label: 'Temp' },
+                { key: 'report', label: 'Reports' },
+                { key: 'heartbeat', label: 'Heartbeats' },
+              ].map((f) => (
+                <Button
+                  key={f.key}
+                  variant={eventFilter === f.key ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setEventFilter(f.key)}
+                  className="h-7 text-xs px-2"
+                >
+                  {f.label}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {events.length === 0 ? (
             <p className="text-center py-4 text-muted-foreground text-sm">No events yet</p>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {events.map((ev) => (
+              {events.filter((ev) => {
+                if (eventFilter === 'all') return true
+                if (eventFilter === 'alert') return ev.level === 'warning' || ev.level === 'critical'
+                if (eventFilter === 'temp') return ev.event_type === 'TEMP_NORMAL' || ev.event_type === 'HIGH_TEMP'
+                if (eventFilter === 'report') return ev.event_type.includes('REPORT')
+                if (eventFilter === 'heartbeat') return ev.event_type === 'heartbeat'
+                return true
+              }).map((ev) => (
                 <div key={ev.id} className="flex items-start gap-3 py-2 border-b last:border-0 text-sm">
                   <div className="shrink-0 mt-0.5">
                     <Clock className="w-3 h-3 text-muted-foreground" />
@@ -415,7 +465,7 @@ export function IotcenterSourceDetailPage() {
                           .filter(([, v]) => v !== null && v !== undefined)
                           .map(([key, value]) => (
                             <span key={key} className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                              {key}: {typeof value === 'number' ? Number(value).toFixed(1) : String(value)}
+                              {humanLabel(key)}: {formatPayloadValue(value)}
                             </span>
                           ))}
                       </div>
