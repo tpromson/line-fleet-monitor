@@ -247,7 +247,9 @@ export function IotcenterSourceDetailPage() {
     )
   }
 
-  const showTempChart = source.source_type.name === 'temperature'
+  const showTempChart = events.some(
+    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+  )
 
   return (
     <div className="space-y-6">

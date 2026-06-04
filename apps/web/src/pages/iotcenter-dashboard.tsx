@@ -154,26 +154,25 @@ export function IotcenterDashboardPage() {
   }
 
   const tempWidgets: TempWidget[] = []
-  const tempSources = typeMap.get('temperature') || []
-  if (tempSources.length > 0) {
-    for (const s of tempSources) {
-      const tempEvent = s.events.find(
-        (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
-      )
-      const todayStr = new Date().toLocaleDateString()
-      const dailyReport = s.events.find(
-        (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
-      )
+  for (const s of sources) {
+    const tempEvent = s.events.find(
+      (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP'
+    )
+    if (!tempEvent) continue
 
-      tempWidgets.push({
-        sourceId: s.id,
-        sourceName: s.name,
-        currentTemp: tempEvent ? (tempEvent.payload?.temperature as number) ?? null : null,
-        todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
-        todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
-        deviceStatus: s.devices.length > 0 ? s.devices[0].status : 'unknown',
-      })
-    }
+    const todayStr = new Date().toLocaleDateString()
+    const dailyReport = s.events.find(
+      (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
+    )
+
+    tempWidgets.push({
+      sourceId: s.id,
+      sourceName: s.name,
+      currentTemp: (tempEvent.payload?.temperature as number) ?? null,
+      todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? null : null,
+      todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? null : null,
+      deviceStatus: s.devices.length > 0 ? s.devices[0].status : 'unknown',
+    })
   }
 
   const deviceStatusBadge = (status: string) => {
