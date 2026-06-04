@@ -61,6 +61,7 @@ interface TempWidget {
   sourceId: string
   sourceName: string
   currentTemp: number | null
+  currentHumid: number | null
   todayMax: number | null
   todayMin: number | null
   todayAvg: number | null
@@ -168,6 +169,7 @@ export function IotcenterDashboardPage() {
       sourceId: src.id,
       sourceName: src.name,
       currentTemp: (tempEvent.payload?.temperature as number) ?? (tempEvent.payload?.lastTemperature as number) ?? null,
+      currentHumid: (tempEvent.payload?.humidity as number) ?? (tempEvent.payload?.lastHumidity as number) ?? null,
       todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? realtimeMax : realtimeMax,
       todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? realtimeMin : realtimeMin,
       todayAvg: dailyReport ? (dailyReport.payload?.avgTemp as number) ?? realtimeAvg : realtimeAvg,
@@ -324,6 +326,14 @@ export function IotcenterDashboardPage() {
                       </span>
                       <span className="text-xs text-muted-foreground">°C</span>
                     </div>
+                    {tw.currentHumid !== null && tw.currentHumid > 0 && (
+                      <div className="flex items-baseline gap-1 mb-1">
+                        <span className="text-sm font-medium text-sky-500">
+                          💧 {tw.currentHumid.toFixed(1)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>
                         🔺 {tw.todayMax !== null ? tw.todayMax.toFixed(1) + '°C' : '-'}

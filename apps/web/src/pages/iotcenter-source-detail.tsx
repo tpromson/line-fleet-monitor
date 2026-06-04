@@ -52,6 +52,7 @@ interface SourceRaw {
 interface TempLog {
   timestamp: string
   temperature: number
+  humidity?: number
 }
 
 type DateRange = '1d' | '3d' | '7d' | '30d'
@@ -102,6 +103,7 @@ export function IotcenterSourceDetailPage() {
   const [tempLogs, setTempLogs] = useState<TempLog[]>([])
   const [chartThreshold, setChartThreshold] = useState(10)
   const [chartMax, setChartMax] = useState(30)
+  const [hasHumidity, setHasHumidity] = useState(false)
   const [chartLoading, setChartLoading] = useState(false)
   const [eventFilter, setEventFilter] = useState<string>('all')
 
@@ -185,19 +187,20 @@ export function IotcenterSourceDetailPage() {
       : (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
     if (data) {
-      const logs = data
-        .filter((e) => {
-          const p = e.payload as Record<string, unknown>
-          return p && (typeof p.temperature === 'number' || typeof p.lastTemperature === 'number')
-        })
-        .map((e) => {
-          const p = e.payload as Record<string, unknown>
-          return {
-            timestamp: fmt(new Date(e.created_at)),
-            temperature: (p.temperature as number) ?? (p.lastTemperature as number),
-          }
-        })
+      const logs: TempLog[] = []
+      let hasHumid = false
+      for (const e of data) {
+        const p = e.payload as Record<string, unknown>
+        const t = (p.temperature as number) ?? (p.lastTemperature as number)
+        const h = (p.humidity as number) ?? (p.lastHumidity as number)
+        if (typeof t === 'number') {
+          const log: TempLog = { timestamp: fmt(new Date(e.created_at)), temperature: t }
+          if (typeof h === 'number' && h > 0) { log.humidity = h; hasHumid = true }
+          logs.push(log)
+        }
+      }
       setTempLogs(logs)
+      setHasHumidity(hasHumid)
       if (logs.length > 0) {
         const maxT = Math.ceil(Math.max(...logs.map((l) => l.temperature)) + 5)
         setChartMax(maxT > srcThreshold + 2 ? maxT : srcThreshold + 2)
@@ -430,6 +433,18 @@ export function IotcenterSourceDetailPage() {
                     tickLine={false}
                     width={45}
                   />
+                  {hasHumidity && (
+                    <YAxis
+                      yAxisId="humidity"
+                      orientation="right"
+                      unit="%"
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11, fill: '#06b6d4' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={45}
+                    />
+                  )}
                   <Tooltip
                     cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4', strokeWidth: 1 }}
                     contentStyle={{
@@ -470,6 +485,17 @@ export function IotcenterSourceDetailPage() {
                     dot={false}
                     activeDot={{ r: 5, fill: '#ef4444', stroke: '#fff', strokeWidth: 2 }}
                   />
+                  {hasHumidity && (
+                    <Line
+                      yAxisId="humidity"
+                      type="linear"
+                      dataKey="humidity"
+                      stroke="#06b6d4"
+                      strokeWidth={1.5}
+                      dot={false}
+                      activeDot={{ r: 4, fill: '#06b6d4', stroke: '#fff', strokeWidth: 2 }}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
               </div>
