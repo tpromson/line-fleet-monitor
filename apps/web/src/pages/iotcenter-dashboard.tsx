@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer } from 'lucide-react'
 import { formatTimestamp } from '@/lib/labels'
 
@@ -71,6 +72,7 @@ export function IotcenterDashboardPage() {
   const [tempWidgets, setTempWidgets] = useState<TempWidget[]>([])
   const [loading, setLoading] = useState(true)
   const [collapsedSources, setCollapsedSources] = useState(false)
+  const [selectedOrgId, setSelectedOrgId] = useState('all')
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -170,27 +172,30 @@ export function IotcenterDashboardPage() {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount and interval
     load()
     const interval = setInterval(() => { load() }, 60000)
     return () => clearInterval(interval)
   }, [load])
 
-  const totalSources = sources.length
-  const allDevices = sources.flatMap((s) => s.devices)
+  const totalSources = filteredSources.length
+  const allDevices = filteredSources.flatMap((s) => s.devices)
   const onlineDevices = allDevices.filter((d) => d.status === 'online').length
   const offlineDevices = allDevices.filter((d) => d.status === 'offline').length
   const delayedDevices = allDevices.filter((d) => d.status === 'delayed').length
-  const alertCount = sources.reduce((acc, s) => {
+  const alertCount = filteredSources.reduce((acc, s) => {
     return s.last_event && s.last_event.level && ['warning', 'critical'].includes(s.last_event.level) ? acc + 1 : acc
   }, 0)
 
-  const typeMap = new Map<string, SourceSummary[]>()
-  for (const s of sources) {
+  const filteredTypeMap = new Map<string, SourceSummary[]>()
+  for (const s of filteredSources) {
     const key = s.source_type.name
-    if (!typeMap.has(key)) typeMap.set(key, [])
-    typeMap.get(key)!.push(s)
+    if (!filteredTypeMap.has(key)) filteredTypeMap.set(key, [])
+    filteredTypeMap.get(key)!.push(s)
   }
+
+  const orgOptions = [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()]
+  const filteredSources = selectedOrgId === 'all' ? sources : sources.filter((s) => s.organization.id === selectedOrgId)
+  const filteredWidgets = selectedOrgId === 'all' ? tempWidgets : tempWidgets.filter((tw) => sources.find((s) => s.id === tw.sourceId)?.organization.id === selectedOrgId)
 
   const deviceStatusBadge = (status: string) => {
     switch (status) {
@@ -225,13 +230,37 @@ export function IotcenterDashboardPage() {
         <p className="text-muted-foreground text-xs">Multi-source monitoring dashboard</p>
       </div>
 
-      {!loading && tempWidgets.length > 0 && (
+      {!loading && orgOptions.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <Button
+            variant={selectedOrgId === 'all' ? 'default' : 'outline'}
+            size="sm"
+            className="h-7 text-xs shrink-0"
+            onClick={() => setSelectedOrgId('all')}
+          >
+            All
+          </Button>
+          {orgOptions.map((org) => (
+            <Button
+              key={org.id}
+              variant={selectedOrgId === org.id ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs shrink-0"
+              onClick={() => setSelectedOrgId(org.id)}
+            >
+              {org.name}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {!loading && filteredWidgets.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
             <Thermometer className="w-4 h-4" /> Temperature Overview
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {tempWidgets.map((tw, i) => (
+            {filteredWidgets.map((tw, i) => (
               <Link key={tw.sourceId} to={`/iotcenter/sources/${tw.sourceId}`} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
                 <Card className="hover:border-primary/50 hover:shadow-md hover:scale-[1.02] transition-all duration-150 h-full">
                   <CardContent className="pt-4 pb-3">
@@ -294,7 +323,7 @@ export function IotcenterDashboardPage() {
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
         </div>
-      ) : sources.length === 0 ? (
+      ) : filteredSources.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             No sources configured yet. Add sources from the Setup page.
@@ -307,11 +336,11 @@ export function IotcenterDashboardPage() {
             className="flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground mb-3 w-full text-left transition-colors duration-150"
           >
             {collapsedSources ? <ChevronRight className="w-4 h-4 transition-transform duration-200" /> : <ChevronDown className="w-4 h-4 transition-transform duration-200" />}
-            All Sources ({sources.length})
+            All Sources ({filteredSources.length})
           </button>
           {!collapsedSources && (
             <div className="space-y-8">
-              {[...typeMap.entries()].map(([typeName, typeSources]) => {
+              {[...filteredTypeMap.entries()].map(([typeName, typeSources]) => {
                 const typeDisplay = typeSources[0]?.source_type.display_name ?? typeName
                 return (
                   <div key={typeName}>
