@@ -80,6 +80,7 @@ export function IotcenterDashboardPage() {
   const tabContainerRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const [error, setError] = useState<string | null>(null)
+  const [emptyShiftSources, setEmptyShiftSources] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     try {
@@ -124,12 +125,21 @@ export function IotcenterDashboardPage() {
         .from('events')
         .select('id, source_id, event_type, level, message, payload, created_at')
         .in('source_id', sourceIds)
-        .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'DAILY_REPORT', 'heartbeat'])
+        .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'DAILY_REPORT', 'heartbeat', 'SHIFT_REPORT_EMPTY'])
         .gte('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false })
         .limit(2000)
 
       if (eventsError) throw new Error(eventsError.message)
+
+      const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000
+      const emptyShifts = new Set<string>()
+      for (const ev of (allEvents || []) as EventData[]) {
+        if (ev.event_type !== 'SHIFT_REPORT_EMPTY') continue
+        if (new Date(ev.created_at).getTime() < oneDayAgoMs) continue
+        emptyShifts.add(ev.source_id)
+      }
+      setEmptyShiftSources(emptyShifts)
 
       const eventsBySource = new Map<string, EventData[]>()
       for (const ev of (allEvents || []) as EventData[]) {
@@ -298,6 +308,15 @@ export function IotcenterDashboardPage() {
         <div className="mb-6">
           <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
             <Thermometer className="w-4 h-4" /> Temperature Overview
+            {emptyShiftSources.size > 0 && (
+              <span
+                className="ml-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium"
+                title={`No data in last shift report for ${emptyShiftSources.size} source${emptyShiftSources.size === 1 ? '' : 's'}`}
+              >
+                <AlertTriangle className="w-3 h-3" />
+                {emptyShiftSources.size} empty shift{emptyShiftSources.size === 1 ? '' : 's'}
+              </span>
+            )}
             {filteredWidgets.every((tw) => tw.currentTemp !== null && tw.currentTemp < tw.threshold) && (
               <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">All Clear</span>
             )}
