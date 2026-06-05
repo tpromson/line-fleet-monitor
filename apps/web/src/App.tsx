@@ -9,6 +9,7 @@ import { ChannelDetailPage } from '@/pages/channel-detail'
 import { SetupPage } from '@/pages/setup'
 import { IotcenterDashboardPage } from '@/pages/iotcenter-dashboard'
 import { IotcenterSourceDetailPage } from '@/pages/iotcenter-source-detail'
+import { PublicIotcenterPage } from '@/pages/public-iotcenter'
 import { Toaster } from '@/components/ui/sonner'
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/public/iotcenter" element={<PublicIotcenterPage />} />
         <Route
           path="/*"
           element={

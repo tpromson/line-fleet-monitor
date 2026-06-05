@@ -122,4 +122,90 @@ export function registerIotcenterRoutes(app: Express) {
 
     res.json({ api_key: source.api_key })
   })
+
+  app.get('/public/iotcenter/temperature', async (_req: Request, res: Response) => {
+    const now = new Date()
+    const todayStr = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok' })
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+    const { data: sources } = await supabase
+      .from('sources')
+      .select('id, name, organization_id, metadata, channel_id, active')
+      .eq('active', true)
+
+    if (!sources || sources.length === 0) {
+      res.json({ widgets: [] })
+      return
+    }
+
+    const sourceIds = sources.map((s) => s.id)
+
+    const { data: events } = await supabase
+      .from('events')
+      .select('source_id, event_type, level, payload, created_at')
+      .in('source_id', sourceIds)
+      .gte('created_at', oneDayAgo.toISOString())
+      .order('created_at', { ascending: false })
+
+    const { data: latestDevices } = await supabase
+      .from('devices')
+      .select('id, source_id, device_name, status, last_seen')
+      .in('source_id', sourceIds)
+
+    const widgets = []
+
+    for (const src of sources) {
+      const srcEvents = (events || []).filter((e) => e.source_id === src.id)
+      const threshold = (src.metadata as Record<string, unknown>)?.threshold as number || 10
+
+      const tempEvent = srcEvents.find(
+        (e) =>
+          e.event_type === 'TEMP_NORMAL' ||
+          e.event_type === 'HIGH_TEMP' ||
+          (e.event_type === 'heartbeat' && ((e.payload as Record<string, unknown>)?.temperature || (e.payload as Record<string, unknown>)?.lastTemperature))
+      )
+
+      const currentTemp = tempEvent
+        ? (((tempEvent.payload as Record<string, unknown>)?.temperature as number) ?? ((tempEvent.payload as Record<string, unknown>)?.lastTemperature as number) ?? null)
+        : null
+
+      const currentHumid = tempEvent
+        ? (((tempEvent.payload as Record<string, unknown>)?.humidity as number) ?? ((tempEvent.payload as Record<string, unknown>)?.lastHumidity as number) ?? null)
+        : null
+
+      const todayEvents = srcEvents.filter(
+        (e) => new Date(e.created_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok' }) === todayStr
+      )
+
+      const dailyReport = srcEvents.find(
+        (e) =>
+          e.event_type === 'DAILY_REPORT' &&
+          new Date(e.created_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok' }) === todayStr
+      )
+
+      const todayTemps = todayEvents
+        .map((e) => ((e.payload as Record<string, unknown>)?.temperature as number) ?? ((e.payload as Record<string, unknown>)?.lastTemperature as number))
+        .filter((t) => typeof t === 'number')
+
+      const realtimeMax = todayTemps.length > 0 ? Math.max(...todayTemps) : null
+      const realtimeMin = todayTemps.length > 0 ? Math.min(...todayTemps) : null
+      const realtimeAvg = todayTemps.length > 0 ? todayTemps.reduce((a, b) => a + b, 0) / todayTemps.length : null
+
+      const device = (latestDevices || []).find((d) => d.source_id === src.id)
+
+      widgets.push({
+        sourceId: src.id,
+        sourceName: src.name,
+        currentTemp,
+        currentHumid,
+        todayMax: dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.maxTemp as number) ?? realtimeMax : realtimeMax,
+        todayMin: dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.minTemp as number) ?? realtimeMin : realtimeMin,
+        todayAvg: dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.avgTemp as number) ?? realtimeAvg : realtimeAvg,
+        threshold,
+        deviceStatus: device?.status ?? 'unknown',
+      })
+    }
+
+    res.json({ widgets })
+  })
 }
