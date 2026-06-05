@@ -1238,18 +1238,22 @@ function PublicConfigManager() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
   useEffect(() => { load() }, [load])
 
-  const updateConfig = async (id: string, field: keyof PublicConfigRow, value: boolean | string | number) => {
+  const updateConfig = async (id: string, field: string, value: unknown) => {
     setSaving(id)
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString(), [field]: value }
-    await supabase.from('public_configs').update(updates).eq('id', id)
-    setConfigs((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)))
+    const { error } = await supabase.from('public_configs').update(updates).eq('id', id)
+    if (error) {
+      toast.error('Failed to update: ' + error.message)
+    } else {
+      setConfigs((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)))
+    }
     setSaving(null)
   }
 
   const createConfig = async (sourceId: string) => {
     const existing = configs.find((c) => c.source_id === sourceId)
     if (existing) return
-    await supabase.from('public_configs').insert({
+    const { error } = await supabase.from('public_configs').insert({
       source_id: sourceId,
       enabled: true,
       show_temperature: true,
@@ -1258,7 +1262,11 @@ function PublicConfigManager() {
       show_avg: true,
       display_order: configs.length,
     })
-    load()
+    if (error) {
+      toast.error('Failed to add: ' + error.message)
+    } else {
+      load()
+    }
   }
 
   const deleteConfig = async (id: string) => {
@@ -1354,7 +1362,7 @@ function PublicConfigManager() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Input
-                        value={cfg.display_name || ''}
+                        value={cfg.display_name ?? ''}
                         onChange={(e) => setConfigs((prev) => prev.map((c) => c.id === cfg.id ? { ...c, display_name: e.target.value } : c))}
                         onBlur={(e) => updateConfig(cfg.id, 'display_name', e.target.value)}
                         placeholder="Display name"
