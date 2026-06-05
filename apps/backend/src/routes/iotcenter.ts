@@ -128,17 +128,29 @@ export function registerIotcenterRoutes(app: Express) {
     const todayStr = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok' })
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
+    const { data: configs } = await supabase
+      .from('public_configs')
+      .select('source_id, display_name, show_temperature, show_humidity, show_min_max, show_avg, display_order')
+      .eq('enabled', true)
+      .order('display_order')
+
+    if (!configs || configs.length === 0) {
+      res.json({ widgets: [] })
+      return
+    }
+
+    const sourceIds = configs.map((c) => c.source_id)
+
     const { data: sources } = await supabase
       .from('sources')
-      .select('id, name, organization_id, metadata, channel_id, active')
+      .select('id, name, metadata, active')
+      .in('id', sourceIds)
       .eq('active', true)
 
     if (!sources || sources.length === 0) {
       res.json({ widgets: [] })
       return
     }
-
-    const sourceIds = sources.map((s) => s.id)
 
     const { data: events } = await supabase
       .from('events')
@@ -154,7 +166,10 @@ export function registerIotcenterRoutes(app: Express) {
 
     const widgets = []
 
-    for (const src of sources) {
+    for (const cfg of configs) {
+      const src = sources.find((s) => s.id === cfg.source_id)
+      if (!src) continue
+
       const srcEvents = (events || []).filter((e) => e.source_id === src.id)
       const threshold = (src.metadata as Record<string, unknown>)?.threshold as number || 10
 
@@ -195,12 +210,12 @@ export function registerIotcenterRoutes(app: Express) {
 
       widgets.push({
         sourceId: src.id,
-        sourceName: src.name,
-        currentTemp,
-        currentHumid,
-        todayMax: dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.maxTemp as number) ?? realtimeMax : realtimeMax,
-        todayMin: dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.minTemp as number) ?? realtimeMin : realtimeMin,
-        todayAvg: dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.avgTemp as number) ?? realtimeAvg : realtimeAvg,
+        sourceName: cfg.display_name || src.name,
+        currentTemp: cfg.show_temperature ? currentTemp : null,
+        currentHumid: cfg.show_humidity ? currentHumid : null,
+        todayMax: cfg.show_min_max ? (dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.maxTemp as number) ?? realtimeMax : realtimeMax) : null,
+        todayMin: cfg.show_min_max ? (dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.minTemp as number) ?? realtimeMin : realtimeMin) : null,
+        todayAvg: cfg.show_avg ? (dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.avgTemp as number) ?? realtimeAvg : realtimeAvg) : null,
         threshold,
         deviceStatus: device?.status ?? 'unknown',
       })
