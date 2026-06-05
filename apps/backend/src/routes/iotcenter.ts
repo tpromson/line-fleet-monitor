@@ -186,7 +186,7 @@ async function fetchWidgetData(sourceIds: string[]) {
       .in('source_id', sourceIds)
       .gte('created_at', oneDayAgo.toISOString())
       .order('created_at', { ascending: false }),
-    supabase.from('devices').select('id, source_id, device_name, status, last_seen').in('id', sourceIds),
+    supabase.from('devices').select('id, source_id, device_name, status, last_seen').in('source_id', sourceIds),
   ])
 
   return {
