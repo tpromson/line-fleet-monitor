@@ -227,7 +227,11 @@ export function registerIotcenterRoutes(app: Express) {
 
   app.get('/public/iotcenter/temperature/:sourceId/chart', async (req: Request, res: Response) => {
     const { sourceId } = req.params
-    const range = req.query.range === '3d' ? '3d' : '1d'
+    const range = (req.query.range as string) || '1d'
+    if (!['1d', '3d', '7d', '30d'].includes(range)) {
+      res.status(400).json({ error: 'Invalid range' })
+      return
+    }
 
     const { data: config } = await supabase
       .from('public_configs')
@@ -242,8 +246,12 @@ export function registerIotcenterRoutes(app: Express) {
     }
 
     const since = new Date()
-    if (range === '3d') since.setDate(since.getDate() - 3)
-    else since.setDate(since.getDate() - 1)
+    switch (range) {
+      case '3d': since.setDate(since.getDate() - 3); break
+      case '7d': since.setDate(since.getDate() - 7); break
+      case '30d': since.setDate(since.getDate() - 30); break
+      default: since.setDate(since.getDate() - 1)
+    }
 
     const { data: events } = await supabase
       .from('events')
