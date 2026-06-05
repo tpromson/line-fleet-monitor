@@ -48,7 +48,7 @@ describe('fetchChannelQuota', () => {
   })
 
   it('returns HTTP error on other status codes', async () => {
-    mockFetch.mockResolvedValueOnce({
+    mockFetch.mockResolvedValue({
       ok: false,
       status: 500,
     })

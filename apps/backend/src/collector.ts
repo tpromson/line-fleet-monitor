@@ -1,7 +1,8 @@
 import { supabase } from './lib/supabase.js'
 import { fetchChannelQuota, sleep } from './lib/line-api.js'
 
-const CONCURRENCY = 3
+const BATCH_SIZE = parseInt(process.env.COLLECTOR_BATCH_SIZE || '3', 10)
+const BATCH_DELAY_MS = parseInt(process.env.COLLECTOR_BATCH_DELAY_MS || '300', 10)
 
 export async function collectAllQuotas() {
   console.log('[collector] Starting quota collection...')
@@ -16,10 +17,10 @@ export async function collectAllQuotas() {
     return
   }
 
-  console.log(`[collector] Found ${channels.length} active channels`)
+  console.log(`[collector] Found ${channels.length} active channels (batch size: ${BATCH_SIZE})`)
 
-  for (let i = 0; i < channels.length; i += CONCURRENCY) {
-    const batch = channels.slice(i, i + CONCURRENCY)
+  for (let i = 0; i < channels.length; i += BATCH_SIZE) {
+    const batch = channels.slice(i, i + BATCH_SIZE)
     const results: Promise<void>[] = batch.map(async (channel) => {
       try {
         const quota = await fetchChannelQuota(channel.access_token, channel.quota_limit)
@@ -40,7 +41,7 @@ export async function collectAllQuotas() {
       }
     })
     await Promise.allSettled(results)
-    if (i + CONCURRENCY < channels.length) await sleep(300)
+    if (i + BATCH_SIZE < channels.length) await sleep(BATCH_DELAY_MS)
   }
 
   console.log('[collector] Collection complete')

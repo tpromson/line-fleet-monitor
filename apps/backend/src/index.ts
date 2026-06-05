@@ -1,15 +1,22 @@
 import { buildApp } from './app.js'
 import cron from 'node-cron'
+import * as Sentry from '@sentry/node'
 import { collectAllQuotas } from './collector.js'
 import { checkAlerts } from './alert-engine.js'
 import { checkAllWebhooks } from './webhook-monitor.js'
 import { detectOfflineDevices } from './iotcenter-health.js'
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN })
+}
 
 const PORT = process.env.PORT || 3001
 const app = buildApp()
 
 let collectionRunning = false
 let offlineCheckRunning = false
+let collectionFailureCount = 0
+const ALERT_AFTER_FAILURES = 3
 
 async function runCollection() {
   if (collectionRunning) { console.log('[cron] Skipped - previous collection still running'); return }
@@ -19,8 +26,14 @@ async function runCollection() {
     await checkAllWebhooks()
     await checkAlerts()
     await detectOfflineDevices()
+    collectionFailureCount = 0
   } catch (err) {
-    console.error('[cron] Collection error:', err)
+    collectionFailureCount++
+    console.error(`[cron] Collection error (failure #${collectionFailureCount}):`, err)
+    Sentry.captureException(err, { tags: { context: 'cron-collection' } })
+    if (collectionFailureCount >= ALERT_AFTER_FAILURES) {
+      console.error(`[cron] CRITICAL: ${collectionFailureCount} consecutive collection failures`)
+    }
   } finally {
     collectionRunning = false
   }
@@ -28,14 +41,20 @@ async function runCollection() {
 
 cron.schedule('0 0,6,12,18 * * *', () => {
   console.log('[cron] Scheduled collection triggered')
-  runCollection().catch((err) => console.error('[cron] runCollection unhandled:', err))
+  runCollection().catch((err) => {
+    console.error('[cron] runCollection unhandled:', err)
+    Sentry.captureException(err, { tags: { context: 'cron-runCollection' } })
+  })
 })
 
 cron.schedule('*/5 * * * *', () => {
   if (offlineCheckRunning) return
   offlineCheckRunning = true
   detectOfflineDevices()
-    .catch((err) => console.error('[cron] detectOfflineDevices unhandled:', err))
+    .catch((err) => {
+      console.error('[cron] detectOfflineDevices unhandled:', err)
+      Sentry.captureException(err, { tags: { context: 'cron-offline-check' } })
+    })
     .finally(() => { offlineCheckRunning = false })
 })
 
