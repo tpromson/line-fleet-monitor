@@ -102,6 +102,7 @@ var TARGET_SPREADSHEET_ID = ""; // ใส่ Spreadsheet ID ของคุณ�
 
 var TEMP_COLUMN = 3; // คอลัมน์ C (A=1, B=2, C=3)
 var TEMP_IDX = TEMP_COLUMN - 1; // สำหรับดึงค่าจาก Array (A=0, B=1, C=2)
+var HUMID_COLUMN = 4; // คอลัมน์ D (A=1, B=2, C=3, D=4)
 var THRESHOLD = 10; // อุณหภูมิแจ้งเตือน
 var MAX_PLAUSIBLE_TEMP = 20;
 var MIN_PLAUSIBLE_TEMP = -10;
@@ -116,11 +117,14 @@ function heartbeat() {
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
   var lastTemp = lastRow >= 2 ? sheet.getRange(lastRow, TEMP_COLUMN).getValue() : null;
+  var lastHumid = lastRow >= 2 ? sheet.getRange(lastRow, HUMID_COLUMN).getValue() : null;
 
-  IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, {
-    lastTemperature: lastTemp,
-    lastRow: lastRow
-  });
+  var payload = { lastTemperature: lastTemp, lastRow: lastRow };
+  if (lastHumid !== null && !isNaN(lastHumid) && lastHumid > 0) {
+    payload.lastHumidity = lastHumid;
+  }
+
+  IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, payload);
 }
 
 // ==========================================
@@ -185,8 +189,9 @@ function checkSensorStatus() {
   }
 
   var lastValue = sheet.getRange(lastRow, 1).getValue();
-  var lastTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue(); 
-  
+  var lastTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue();
+  var lastHumid = sheet.getRange(lastRow, HUMID_COLUMN).getValue();
+
   var props = PropertiesService.getScriptProperties();
   var lastStatus = props.getProperty("SENSOR_STATUS");
 
@@ -206,13 +211,16 @@ function checkSensorStatus() {
                     "🕒 เมื่อเวลา: " + lastTimeStr + "\n" +
                     "📢 กรุณาตรวจสอบอุปกรณ์");
         
-        props.setProperty("SENSOR_STATUS", "OFFLINE");
+               props.setProperty("SENSOR_STATUS", "OFFLINE");
+
+        var eventPayload = { lastTemperature: lastTemp, lastContact: lastDate.toISOString(), minutesSinceLastContact: Math.round(diffInMinutes) };
+        if (lastHumid !== null && !isNaN(lastHumid) && lastHumid > 0) eventPayload.lastHumidity = lastHumid;
 
         IoTcenter.sendEvent(
           'SENSOR_OFFLINE',
           'critical',
           'Sensor ขาดการติดต่อ > ' + Math.round(diffInMinutes) + ' นาที',
-          { lastTemperature: lastTemp, lastContact: lastDate.toISOString(), minutesSinceLastContact: Math.round(diffInMinutes) }
+          eventPayload
         );
       }
     } 
