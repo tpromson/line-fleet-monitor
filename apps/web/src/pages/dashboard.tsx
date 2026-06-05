@@ -75,8 +75,8 @@ export function DashboardPage() {
           organization:organization_id (id, name),
           channels (
             id, channel_name, quota_limit,
-            latest_log:quota_logs(quota_used, quota_remaining, checked_at).order(checked_at.desc).limit(1),
-            latest_alert:alerts(level).order(created_at.desc).limit(1)
+            latest_log:quota_logs(quota_used, quota_remaining, checked_at),
+            latest_alert:alerts(level, created_at)
           )
         `)
         .order('name')
