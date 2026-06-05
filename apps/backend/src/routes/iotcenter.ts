@@ -385,8 +385,8 @@ export function registerIotcenterRoutes(app: Express) {
     }
 
     const fmt = range === '1d'
-      ? (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? (d: Date) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
+      : (d: Date) => d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
 
     const chartData = events
       .map((e) => {
@@ -471,8 +471,8 @@ export function registerIotcenterRoutes(app: Express) {
     }
 
     const fmt = range === '1d'
-      ? (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? (d: Date) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
+      : (d: Date) => d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
 
     const chartData = events
       .map((e) => {
