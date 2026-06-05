@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { fetchBackend } from '@/lib/backend-api'
 import { toast } from 'sonner'
+import { Copy, Share2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -89,7 +90,8 @@ export function SetupPage() {
         <TabsContent value="sources" className="mt-4">
           <SourceManager />
         </TabsContent>
-        <TabsContent value="public" className="mt-4">
+        <TabsContent value="public" className="mt-4 space-y-4">
+          <OrgSharingSettings />
           <PublicConfigManager />
         </TabsContent>
       </Tabs>
@@ -1179,6 +1181,147 @@ function SourceManager() {
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface OrgSharingRow {
+  id: string
+  name: string
+  public_enabled: boolean
+  public_slug: string | null
+}
+
+function OrgSharingSettings() {
+  const [orgs, setOrgs] = useState<OrgSharingRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('organizations')
+      .select('id, name, public_enabled, public_slug')
+      .order('name')
+    if (data) {
+      setOrgs(data)
+    }
+    setLoading(false)
+  }, [])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
+  useEffect(() => { load() }, [load])
+
+  const updateOrg = async (id: string, field: string, value: unknown) => {
+    setSaving(id)
+    const { error } = await supabase.from('organizations').update({ [field]: value }).eq('id', id)
+    if (error) {
+      toast.error('Failed to update: ' + error.message)
+    } else {
+      setOrgs((prev) => prev.map((o) => (o.id === id ? { ...o, [field]: value } : o)))
+    }
+    setSaving(null)
+  }
+
+  const regenerateSlug = async (org: OrgSharingRow) => {
+    setSaving(org.id)
+    const baseSlug = org.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '').substring(0, 30)
+    const suffix = Math.random().toString(36).substring(2, 8)
+    const newSlug = `${baseSlug}-${suffix}`
+    const { error } = await supabase.from('organizations').update({ public_slug: newSlug }).eq('id', org.id)
+    if (error) {
+      toast.error('Failed to generate slug: ' + error.message)
+    } else {
+      setOrgs((prev) => prev.map((o) => (o.id === org.id ? { ...o, public_slug: newSlug } : o)))
+      toast.success('Slug regenerated')
+    }
+    setSaving(null)
+  }
+
+  const copyShareUrl = (slug: string) => {
+    const url = `${window.location.origin}/public/iotcenter/${slug}`
+    navigator.clipboard.writeText(url)
+    toast.success('Share URL copied!')
+  }
+
+  if (loading) {
+    return <Skeleton className="h-32 w-full" />
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Share2 className="w-4 h-4" />
+              Organization Sharing
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Enable public sharing per organization and copy the shareable URL
+            </p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {orgs.map((org) => (
+            <div key={org.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border rounded-lg">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <select
+                  value={org.public_enabled ? 'yes' : 'no'}
+                  onChange={(e) => updateOrg(org.id, 'public_enabled', e.target.value === 'yes')}
+                  disabled={saving === org.id}
+                  className="text-sm border rounded px-2 py-1"
+                >
+                  <option value="yes">On</option>
+                  <option value="no">Off</option>
+                </select>
+                <span className="text-sm font-medium truncate">{org.name}</span>
+                {org.public_enabled && org.public_slug && (
+                  <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-600 border-emerald-200">
+                    {org.public_slug}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {org.public_enabled && (
+                  <>
+                    {org.public_slug ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => copyShareUrl(org.public_slug!)}
+                        >
+                          <Copy className="w-3 h-3 mr-1" /> Copy URL
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => regenerateSlug(org)}
+                          disabled={saving === org.id}
+                        >
+                          Regenerate
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => regenerateSlug(org)}
+                        disabled={saving === org.id}
+                      >
+                        Generate URL
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   )

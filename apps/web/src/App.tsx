@@ -19,6 +19,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/public/iotcenter" element={<PublicIotcenterPage />} />
+        <Route path="/public/iotcenter/:orgSlug" element={<PublicIotcenterPage />} />
         <Route
           path="/*"
           element={

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   LineChart,
   Line,
@@ -67,7 +67,9 @@ function deviceStatusBadge(status: string) {
 }
 
 export function PublicIotcenterPage() {
+  const { orgSlug } = useParams<{ orgSlug?: string }>()
   const [widgets, setWidgets] = useState<TempWidget[]>([])
+  const [orgName, setOrgName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedWidget, setSelectedWidget] = useState<TempWidget | null>(null)
@@ -75,13 +77,19 @@ export function PublicIotcenterPage() {
   const [chartData, setChartData] = useState<TempLog[]>([])
   const [chartLoading, setChartLoading] = useState(false)
 
+  const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+  const tempEndpoint = orgSlug
+    ? `${baseUrl}/public/iotcenter/${orgSlug}/temperature`
+    : `${baseUrl}/public/iotcenter/temperature`
+
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/public/iotcenter/temperature`)
+        const res = await fetch(tempEndpoint)
         if (!res.ok) throw new Error('Failed to fetch')
         const data = await res.json()
         setWidgets(data.widgets || [])
+        setOrgName(data.orgName || null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load')
       } finally {
@@ -89,14 +97,18 @@ export function PublicIotcenterPage() {
       }
     }
     load()
-  }, [])
+  }, [tempEndpoint])
+
+  const chartEndpoint = useCallback((sourceId: string, range: DateRange) => {
+    return orgSlug
+      ? `${baseUrl}/public/iotcenter/${orgSlug}/temperature/${sourceId}/chart?range=${range}`
+      : `${baseUrl}/public/iotcenter/temperature/${sourceId}/chart?range=${range}`
+  }, [orgSlug, baseUrl])
 
   const loadChart = useCallback(async (sourceId: string, range: DateRange) => {
     setChartLoading(true)
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/public/iotcenter/temperature/${sourceId}/chart?range=${range}`
-      )
+      const res = await fetch(chartEndpoint(sourceId, range))
       if (res.ok) {
         const data = await res.json()
         setChartData(data.data || [])
@@ -108,7 +120,7 @@ export function PublicIotcenterPage() {
     } finally {
       setChartLoading(false)
     }
-  }, [])
+  }, [chartEndpoint])
 
   useEffect(() => {
     if (!selectedWidget) return
@@ -146,7 +158,7 @@ export function PublicIotcenterPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Thermometer className="w-6 h-6" />
-            Temperature Overview
+            {orgName ? `${orgName} - Temperature Overview` : 'Temperature Overview'}
           </h1>
           <Link to="/login" className="text-sm text-muted-foreground hover:text-primary">
             Login to manage
