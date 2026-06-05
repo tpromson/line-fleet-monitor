@@ -71,6 +71,7 @@ export function SetupPage() {
           <TabsTrigger value="channels">Channels</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="sources">Sources</TabsTrigger>
+          <TabsTrigger value="public">Public Page</TabsTrigger>
         </TabsList>
 
         <TabsContent value="organizations" className="mt-4">
@@ -87,6 +88,9 @@ export function SetupPage() {
         </TabsContent>
         <TabsContent value="sources" className="mt-4">
           <SourceManager />
+        </TabsContent>
+        <TabsContent value="public" className="mt-4">
+          <PublicConfigManager />
         </TabsContent>
       </Tabs>
     </div>
@@ -1174,6 +1178,210 @@ function SourceManager() {
               </div>
             ))}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface PublicConfigRow {
+  id: string
+  source_id: string
+  source_name: string
+  enabled: boolean
+  display_name: string | null
+  show_temperature: boolean
+  show_humidity: boolean
+  show_min_max: boolean
+  show_avg: boolean
+  display_order: number
+}
+
+function PublicConfigManager() {
+  const [configs, setConfigs] = useState<PublicConfigRow[]>([])
+  const [sources, setSources] = useState<Array<{ id: string; name: string }>>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [configsRes, sourcesRes] = await Promise.all([
+      supabase
+        .from('public_configs')
+        .select('id, source_id, enabled, display_name, show_temperature, show_humidity, show_min_max, show_avg, display_order, sources(name)')
+        .order('display_order'),
+      supabase.from('sources').select('id, name').eq('active', true).order('name'),
+    ])
+
+    if (configsRes.data) {
+      setConfigs(
+        configsRes.data.map((c) => ({
+          id: c.id,
+          source_id: c.source_id,
+          source_name: Array.isArray(c.sources) ? (c.sources as unknown as { name: string })?.name : (c.sources as unknown as { name: string })?.name ?? '',
+          enabled: c.enabled,
+          display_name: c.display_name,
+          show_temperature: c.show_temperature,
+          show_humidity: c.show_humidity,
+          show_min_max: c.show_min_max,
+          show_avg: c.show_avg,
+          display_order: c.display_order,
+        }))
+      )
+    }
+    if (sourcesRes.data) {
+      setSources(sourcesRes.data)
+    }
+    setLoading(false)
+  }, [])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
+  useEffect(() => { load() }, [load])
+
+  const updateConfig = async (id: string, field: keyof PublicConfigRow, value: boolean | string | number) => {
+    setSaving(id)
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString(), [field]: value }
+    await supabase.from('public_configs').update(updates).eq('id', id)
+    setConfigs((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)))
+    setSaving(null)
+  }
+
+  const createConfig = async (sourceId: string) => {
+    const existing = configs.find((c) => c.source_id === sourceId)
+    if (existing) return
+    await supabase.from('public_configs').insert({
+      source_id: sourceId,
+      enabled: true,
+      show_temperature: true,
+      show_humidity: true,
+      show_min_max: true,
+      show_avg: true,
+      display_order: configs.length,
+    })
+    load()
+  }
+
+  const deleteConfig = async (id: string) => {
+    if (!confirm('Remove from public page?')) return
+    await supabase.from('public_configs').delete().eq('id', id)
+    load()
+  }
+
+  const availableSources = sources.filter((s) => !configs.find((c) => c.source_id === s.id))
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle>Public Page Configuration</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            Configure which sources are visible on{' '}
+            <a href="/public/iotcenter" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+              /public/iotcenter
+            </a>
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-48 w-full" />
+        ) : (
+          <>
+            {configs.length === 0 && availableSources.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">No active sources available</p>
+            ) : (
+              <div className="space-y-4">
+                {configs.map((cfg) => (
+                  <div key={cfg.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={cfg.enabled ? 'yes' : 'no'}
+                          onChange={(e) => updateConfig(cfg.id, 'enabled', e.target.value === 'yes')}
+                          className="text-sm border rounded px-2 py-1"
+                        >
+                          <option value="yes">On</option>
+                          <option value="no">Off</option>
+                        </select>
+                        <span className="text-sm font-medium truncate">{cfg.display_name || cfg.source_name}</span>
+                        <Badge variant="outline" className="text-[10px]">{cfg.source_name}</Badge>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-2 ml-0 sm:ml-24">
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={cfg.show_temperature}
+                            onChange={(e) => updateConfig(cfg.id, 'show_temperature', e.target.checked)}
+                            disabled={saving === cfg.id}
+                          />
+                          Temp
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={cfg.show_humidity}
+                            onChange={(e) => updateConfig(cfg.id, 'show_humidity', e.target.checked)}
+                            disabled={saving === cfg.id}
+                          />
+                          Humid
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={cfg.show_min_max}
+                            onChange={(e) => updateConfig(cfg.id, 'show_min_max', e.target.checked)}
+                            disabled={saving === cfg.id}
+                          />
+                          Min/Max
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={cfg.show_avg}
+                            onChange={(e) => updateConfig(cfg.id, 'show_avg', e.target.checked)}
+                            disabled={saving === cfg.id}
+                          />
+                          Avg
+                        </label>
+                        <input
+                          type="number"
+                          value={cfg.display_order}
+                          onChange={(e) => updateConfig(cfg.id, 'display_order', parseInt(e.target.value) || 0)}
+                          className="w-16 text-xs border rounded px-1 py-0.5"
+                          placeholder="Order"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={cfg.display_name || ''}
+                        onChange={(e) => setConfigs((prev) => prev.map((c) => c.id === cfg.id ? { ...c, display_name: e.target.value } : c))}
+                        onBlur={(e) => updateConfig(cfg.id, 'display_name', e.target.value)}
+                        placeholder="Display name"
+                        className="h-7 text-xs w-32"
+                      />
+                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteConfig(cfg.id)}>
+                        <span className="text-xs">×</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {availableSources.length > 0 && (
+                  <div className="pt-4 border-t">
+                    <p className="text-xs text-muted-foreground mb-2">Add source to public page:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {availableSources.map((s) => (
+                        <Button key={s.id} size="sm" variant="outline" onClick={() => createConfig(s.id)}>
+                          + {s.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
