@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, type ChangeEvent } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, flattenJoin } from '@/lib/supabase'
+import { useConfirm } from '@/hooks/use-confirm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -182,6 +183,7 @@ function ProviderManager() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editError, setEditError] = useState('')
   const [saving, setSaving] = useState(false)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -198,7 +200,7 @@ function ProviderManager() {
         provsRes.data.map((p) => ({
           id: p.id,
           name: p.name,
-          organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
+          organization: flattenJoin(p.organization)!,
         }))
       )
     }
@@ -244,12 +246,19 @@ function ProviderManager() {
   }
 
   const deleteProvider = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This will also delete all channels under it.`)) return
+    const ok = await confirm({
+      title: `Delete "${name}"?`,
+      description: 'This will also delete all channels under it.',
+      confirmText: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     await supabase.from('providers').delete().eq('id', id)
     load()
   }
 
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Providers</CardTitle>
@@ -340,6 +349,8 @@ function ProviderManager() {
         )}
       </CardContent>
     </Card>
+    {confirmDialog}
+    </>
   )
 }
 
@@ -352,6 +363,7 @@ function OrgMembersManager() {
   const [role, setRole] = useState('viewer')
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const loadOrgs = useCallback(async () => {
     const { data } = await supabase.from('organizations').select('id, name, created_at').order('name')
@@ -361,17 +373,6 @@ function OrgMembersManager() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- data loading on mount
   useEffect(() => { loadOrgs() }, [loadOrgs])
 
-  async function fetchUserEmail(userId: string): Promise<string> {
-    try {
-      const res = await fetchBackend(`/api/users/lookup?id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        return data.email ?? userId.slice(0, 8) + '...'
-      }
-    } catch { /* fall through to truncated ID below */ }
-    return userId.slice(0, 8) + '...'
-  }
-
   const loadMembers = useCallback(async (orgId: string) => {
     setLoading(true)
     const { data } = await supabase
@@ -379,17 +380,31 @@ function OrgMembersManager() {
       .select('id, user_id, role')
       .eq('organization_id', orgId)
 
-    if (data) {
-      const enriched = await Promise.all(
-        data.map(async (m) => {
-          const email = await fetchUserEmail(m.user_id)
-          return { ...m, email }
-        })
-      )
-      setMembers(enriched)
-    } else {
+    if (!data) {
       setMembers([])
+      setLoading(false)
+      return
     }
+
+    const userIds = Array.from(new Set(data.map((m) => m.user_id)))
+    let emailMap: Record<string, string> = {}
+    try {
+      const res = await fetchBackend('/api/users/lookup-batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids: userIds }),
+      })
+      if (res.ok) {
+        const body = await res.json() as { users: Record<string, { email: string }> }
+        emailMap = Object.fromEntries(Object.entries(body.users).map(([id, u]) => [id, u.email]))
+      }
+    } catch { /* fall through to truncated IDs */ }
+
+    const enriched = data.map((m) => ({
+      ...m,
+      email: emailMap[m.user_id] ?? m.user_id.slice(0, 8) + '...',
+    }))
+    setMembers(enriched)
     setLoading(false)
   }, [])
 
@@ -427,12 +442,18 @@ function OrgMembersManager() {
   }
 
   const removeMember = async (id: string) => {
-    if (!confirm('Remove this member?')) return
+    const ok = await confirm({
+      title: 'Remove this member?',
+      confirmText: 'Remove',
+      destructive: true,
+    })
+    if (!ok) return
     await supabase.from('organization_members').delete().eq('id', id)
     loadMembers(selectedOrg)
   }
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle>Organization Members</CardTitle>
@@ -497,6 +518,8 @@ function OrgMembersManager() {
         )}
       </CardContent>
     </Card>
+    {confirmDialog}
+    </>
   )
 }
 
@@ -514,6 +537,7 @@ function ChannelManager() {
   const [editError, setEditError] = useState('')
   const [createError, setCreateError] = useState('')
   const [saving, setSaving] = useState(false)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -531,7 +555,7 @@ function ChannelManager() {
           channel_id: c.channel_id,
           quota_limit: c.quota_limit,
           active: c.active,
-          provider: Array.isArray(c.provider) ? c.provider[0] : c.provider,
+          provider: flattenJoin(c.provider)!,
         }))
       )
     }
@@ -540,7 +564,7 @@ function ChannelManager() {
         provsRes.data.map((p) => ({
           id: p.id,
           name: p.name,
-          organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
+          organization: flattenJoin(p.organization)!,
         }))
       )
     }
@@ -588,8 +612,7 @@ function ChannelManager() {
   const saveEdit = async () => {
     if (!form.channel_name.trim() || !editingId) return
     setEditError('')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update: only include fields that are non-empty
-    const updateData: any = {
+    const updateData: Record<string, string | number> = {
       provider_id: form.provider_id,
       channel_name: form.channel_name.trim(),
       channel_id: form.channel_id.trim(),
@@ -611,7 +634,13 @@ function ChannelManager() {
   }
 
   const deleteChannel = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+    const ok = await confirm({
+      title: `Delete "${name}"?`,
+      description: 'This cannot be undone.',
+      confirmText: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     await supabase.from('channels').delete().eq('id', id)
     load()
   }
@@ -621,6 +650,7 @@ function ChannelManager() {
   }
 
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Channels</CardTitle>
@@ -788,6 +818,8 @@ function ChannelManager() {
         )}
       </CardContent>
     </Card>
+    {confirmDialog}
+    </>
   )
 }
 
@@ -834,6 +866,7 @@ function SourceManager() {
   const [editChannelId, setEditChannelId] = useState('')
   const [editThreshold, setEditThreshold] = useState('')
   const [editError, setEditError] = useState('')
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -852,19 +885,18 @@ function SourceManager() {
           active: s.active,
           metadata: (s.metadata as Record<string, unknown>) || {},
           channel_id: s.channel_id ?? null,
-          organization: Array.isArray(s.organization) ? s.organization[0] : s.organization,
-          source_type: Array.isArray(s.source_type) ? s.source_type[0] : s.source_type,
+          organization: flattenJoin(s.organization)!,
+          source_type: flattenJoin(s.source_type)!,
         }))
       )
     }
     if (orgsRes.data) setOrgs(orgsRes.data)
     if (typesRes.data) setSourceTypes(typesRes.data)
     if (chsRes.data) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase nested response typing
-      setChannels((chsRes.data as any[]).map((ch) => ({
+      setChannels(chsRes.data.map((ch) => ({
         id: ch.id,
         channel_name: ch.channel_name,
-        provider: Array.isArray(ch.provider) ? ch.provider[0] : ch.provider,
+        provider: flattenJoin(ch.provider as { organization_id: string; name: string } | { organization_id: string; name: string }[] | null)!,
       })))
     }
     setLoading(false)
@@ -899,7 +931,13 @@ function SourceManager() {
   }
 
   const deleteSource = async (id: string, sourceName: string) => {
-    if (!confirm(`Delete "${sourceName}"? This cannot be undone.`)) return
+    const ok = await confirm({
+      title: `Delete "${sourceName}"?`,
+      description: 'This cannot be undone.',
+      confirmText: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     await supabase.from('sources').delete().eq('id', id)
     load()
   }
@@ -949,6 +987,7 @@ function SourceManager() {
   }
 
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Sources</CardTitle>
@@ -1183,6 +1222,8 @@ function SourceManager() {
         )}
       </CardContent>
     </Card>
+    {confirmDialog}
+    </>
   )
 }
 
@@ -1346,6 +1387,7 @@ function PublicConfigManager() {
   const [sources, setSources] = useState<Array<{ id: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1362,7 +1404,7 @@ function PublicConfigManager() {
         configsRes.data.map((c) => ({
           id: c.id,
           source_id: c.source_id,
-          source_name: Array.isArray(c.sources) ? (c.sources as unknown as { name: string })?.name : (c.sources as unknown as { name: string })?.name ?? '',
+          source_name: flattenJoin(c.sources as { name: string } | { name: string }[] | null)?.name ?? '',
           enabled: c.enabled,
           display_name: c.display_name,
           show_temperature: c.show_temperature,
@@ -1416,7 +1458,12 @@ function PublicConfigManager() {
   }
 
   const deleteConfig = async (id: string) => {
-    if (!confirm('Remove from public page?')) return
+    const ok = await confirm({
+      title: 'Remove from public page?',
+      confirmText: 'Remove',
+      destructive: true,
+    })
+    if (!ok) return
     await supabase.from('public_configs').delete().eq('id', id)
     load()
   }
@@ -1424,6 +1471,7 @@ function PublicConfigManager() {
   const availableSources = sources.filter((s) => !configs.find((c) => c.source_id === s.id))
 
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div>
@@ -1548,5 +1596,7 @@ function PublicConfigManager() {
         )}
       </CardContent>
     </Card>
+    {confirmDialog}
+    </>
   )
 }

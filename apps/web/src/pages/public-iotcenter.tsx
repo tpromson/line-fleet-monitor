@@ -17,6 +17,7 @@ import {
   ReferenceLine,
   ReferenceArea,
 } from 'recharts'
+import { useVisibilityPoll } from '@/hooks/use-visibility-poll'
 
 type DateRange = '1d' | '3d' | '7d' | '30d'
 
@@ -124,16 +125,12 @@ export function PublicIotcenterPage() {
 
   useEffect(() => {
     if (!selectedWidget) return
-    const widgetRef = { current: selectedWidget }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- load chart data when widget changes
     loadChart(selectedWidget.sourceId, chartRange)
-    const interval = setInterval(() => {
-      if (widgetRef.current) {
-        loadChart(widgetRef.current.sourceId, chartRange)
-      }
-    }, 60000)
-    return () => clearInterval(interval)
   }, [selectedWidget, chartRange, loadChart])
+  useVisibilityPoll(() => {
+    if (selectedWidget) loadChart(selectedWidget.sourceId, chartRange)
+  }, 60000)
 
   const openChart = (widget: TempWidget) => {
     setSelectedWidget(widget)

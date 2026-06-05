@@ -5,10 +5,13 @@ import { collectAllQuotas } from './collector.js'
 import { checkAlerts } from './alert-engine.js'
 import { checkAllWebhooks } from './webhook-monitor.js'
 import { detectOfflineDevices } from './iotcenter-health.js'
+import { validateEnv } from './lib/env.js'
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN })
 }
+
+validateEnv()
 
 const PORT = process.env.PORT || 3001
 const app = buildApp()
@@ -25,7 +28,6 @@ async function runCollection() {
     await collectAllQuotas()
     await checkAllWebhooks()
     await checkAlerts()
-    await detectOfflineDevices()
     collectionFailureCount = 0
   } catch (err) {
     collectionFailureCount++
@@ -58,9 +60,34 @@ cron.schedule('*/5 * * * *', () => {
     .finally(() => { offlineCheckRunning = false })
 })
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Backend service running on port ${PORT}`)
   console.log('[cron] Schedule: 00:00, 06:00, 12:00, 18:00')
 
   runCollection().catch((err) => console.error('[startup] runCollection error:', err))
 })
+
+let shuttingDown = false
+async function gracefulShutdown(signal: string) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[shutdown] ${signal} received, draining (max 25s)...`)
+
+  server.close(() => console.log('[shutdown] HTTP server closed'))
+
+  const deadline = setTimeout(() => {
+    console.error('[shutdown] Timeout - forcing exit')
+    process.exit(1)
+  }, 25_000)
+
+  while (collectionRunning || offlineCheckRunning) {
+    await new Promise((r) => setTimeout(r, 500))
+  }
+
+  clearTimeout(deadline)
+  console.log('[shutdown] All in-flight work complete')
+  process.exit(0)
+}
+
+process.on('SIGTERM', () => { gracefulShutdown('SIGTERM') })
+process.on('SIGINT', () => { gracefulShutdown('SIGINT') })

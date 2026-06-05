@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/use-auth'
+import { useConfirm } from '@/hooks/use-confirm'
 import { Button } from '@/components/ui/button'
 import { Sun, Moon } from 'lucide-react'
 
@@ -9,6 +10,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { isSuperAdmin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [dark, setDark] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark' ||
@@ -23,7 +25,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [dark])
 
   const handleLogout = async () => {
-    if (!confirm('Are you sure you want to log out?')) return
+    const ok = await confirm({
+      title: 'Log out?',
+      description: 'You will need to sign in again to access the dashboard.',
+      confirmText: 'Log out',
+    })
+    if (!ok) return
     await supabase.auth.signOut()
     navigate('/login')
   }
@@ -70,6 +77,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className="container mx-auto px-4 py-6" id="main-content" tabIndex={-1}>{children}</main>
+      {confirmDialog}
     </div>
   )
 }

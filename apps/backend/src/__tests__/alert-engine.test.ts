@@ -98,11 +98,14 @@ function createMockTable(
     const inFn = vi.fn().mockReturnThis()
     const isFn = vi.fn().mockReturnThis()
     const order = vi.fn().mockReturnThis()
-    order.mockReturnValue({ then: (cb: any) => cb({ data: quotaLogs }) })
-    isFn.mockReturnValue({ order })
-    inFn.mockReturnValue({ is: isFn, order })
-    select.mockReturnValue({ in: inFn, order })
-    return { select, in: inFn } as any
+    const limit = vi.fn().mockReturnThis()
+    const promise = Promise.resolve({ data: quotaLogs })
+    limit.mockReturnValue(promise)
+    order.mockReturnValue({ limit })
+    isFn.mockReturnValue({ order, limit })
+    inFn.mockReturnValue({ is: isFn, order, limit })
+    select.mockReturnValue({ in: inFn, order, limit })
+    return { select, in: inFn, limit } as any
   }
 
   if (table === 'alerts') {

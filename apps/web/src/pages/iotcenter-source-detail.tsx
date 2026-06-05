@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { supabase, flattenJoin } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -139,8 +139,8 @@ export function IotcenterSourceDetailPage() {
           active: raw.active,
           api_key: raw.api_key,
           metadata: (raw.metadata as Record<string, unknown>) || {},
-          source_type: Array.isArray(raw.source_type) ? raw.source_type[0] : raw.source_type,
-          organization: Array.isArray(raw.organization) ? raw.organization[0] : raw.organization,
+          source_type: flattenJoin(raw.source_type)!,
+          organization: flattenJoin(raw.organization)!,
         })
       }
 

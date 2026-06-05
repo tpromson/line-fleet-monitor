@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { supabase, flattenJoin } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer, Snowflake } from 'lucide-react'
-import { formatTimestamp } from '@/lib/labels'
+import { formatTimestamp, todayInTz, dateStrInTz } from '@/lib/labels'
+import { useVisibilityPoll } from '@/hooks/use-visibility-poll'
 
 interface StatCardProps {
   icon: React.ReactNode
@@ -101,8 +102,8 @@ export function IotcenterDashboardPage() {
         name: s.name as string,
         active: s.active as boolean,
         metadata: (s.metadata as Record<string, unknown>) || {},
-        source_type: (Array.isArray(s.source_type) ? s.source_type[0] : s.source_type) as { name: string; display_name: string },
-        organization: (Array.isArray(s.organization) ? s.organization[0] : s.organization) as { id: string; name: string },
+        source_type: flattenJoin(s.source_type) as { name: string; display_name: string },
+        organization: flattenJoin(s.organization) as { id: string; name: string },
         devices: (s.devices || []) as DeviceSummary[],
         last_event: null,
       }))
@@ -137,7 +138,7 @@ export function IotcenterDashboardPage() {
         else eventsBySource.set(ev.source_id, [ev])
       }
 
-      const todayStr = new Date().toLocaleDateString()
+      const todayStr = todayInTz()
 
       const widgets: TempWidget[] = []
 
@@ -158,11 +159,11 @@ export function IotcenterDashboardPage() {
         if (!tempEvent) continue
 
         const dailyReport = events.find(
-          (e) => e.event_type === 'DAILY_REPORT' && new Date(e.created_at).toLocaleDateString() === todayStr
+          (e) => e.event_type === 'DAILY_REPORT' && dateStrInTz(e.created_at) === todayStr
         )
 
         const todayTemps = events
-          .filter((e) => new Date(e.created_at).toLocaleDateString() === todayStr)
+          .filter((e) => dateStrInTz(e.created_at) === todayStr)
           .map((e) => (e.payload?.temperature as number) ?? (e.payload?.lastTemperature as number))
           .filter((t) => typeof t === 'number')
         const realtimeMax = todayTemps.length > 0 ? Math.max(...todayTemps) : null
@@ -194,9 +195,8 @@ export function IotcenterDashboardPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
-    const interval = setInterval(() => { load() }, 60000)
-    return () => clearInterval(interval)
   }, [load])
+  useVisibilityPoll(() => { load() }, 60000)
 
   const orgOptions = useMemo(
     () => [...new Map(sources.map((s) => [s.organization.id, s.organization])).values()],

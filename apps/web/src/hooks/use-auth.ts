@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -19,7 +19,12 @@ export function useAuth() {
     return () => subscription.unsubscribe()
   }, [])
 
+  const refresh = useCallback(async () => {
+    const { data, error } = await supabase.auth.refreshSession()
+    if (!error && data.user) setUser(data.user)
+  }, [])
+
   const isSuperAdmin = user?.app_metadata?.role === 'super_admin'
 
-  return { user, loading, isSuperAdmin }
+  return { user, loading, isSuperAdmin, refresh }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { supabase, flattenJoin } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchBackend } from '@/lib/backend-api'
 import { AlertCircle, TrendingUp, Bell, Activity } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
+import { DailyUsageChartLazy } from './channel-detail-chart-lazy'
 
 interface QuotaLogRow {
   checked_at: string
@@ -112,7 +112,7 @@ export function ChannelDetailPage() {
           active: d.active,
           webhook_status: d.webhook_status ?? 'unknown',
           webhook_checked_at: d.webhook_checked_at ?? null,
-          provider: Array.isArray(d.provider) ? d.provider[0] : d.provider,
+          provider: flattenJoin(d.provider)!,
           latest_log: d.latest_log?.sort((a, b) =>
             new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
           )[0] ?? null,
@@ -134,7 +134,7 @@ export function ChannelDetailPage() {
       if (logs) {
         const byDate = new Map<string, { checked_at: string; quota_used: number }>()
         for (const l of logs) {
-          byDate.set(new Date(l.checked_at).toLocaleDateString(), l)
+          byDate.set(new Date(l.checked_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok' }), l)
         }
         const sorted = [...byDate.entries()].sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
         const daily: DailyLog[] = []
@@ -267,30 +267,7 @@ export function ChannelDetailPage() {
                   <p className="text-muted-foreground">No data yet. Collector will start populating after first run.</p>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={dailyLogs}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                    <XAxis dataKey="checked_at" fontSize={11} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} />
-                    <YAxis fontSize={12} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={45} />
-                    <Tooltip
-                      cursor={{ fill: '#f1f5f9' }}
-                      contentStyle={{ background: '#fff', border: 'none', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 13, padding: '8px 12px' }}
-                      formatter={(value: number) => [value.toLocaleString(), 'Quota Used']}
-                    />
-                    <Bar dataKey="quota_used" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                      {dailyLogs.map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={
-                            entry.quota_used >= 80 ? '#f43f5e' :
-                            entry.quota_used >= 50 ? '#f59e0b' :
-                            '#10b981'
-                          }
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <DailyUsageChartLazy data={dailyLogs} />
               )}
             </CardContent>
           </Card>

@@ -17,6 +17,16 @@ const LABEL_MAP: Record<string, string> = {
   reportType: 'ประเภทรายงาน',
 }
 
+export const DEFAULT_TZ = 'Asia/Bangkok'
+
+export function todayInTz(tz: string = DEFAULT_TZ): string {
+  return new Date().toLocaleDateString('en-GB', { timeZone: tz })
+}
+
+export function dateStrInTz(iso: string, tz: string = DEFAULT_TZ): string {
+  return new Date(iso).toLocaleDateString('en-GB', { timeZone: tz })
+}
+
 export function humanLabel(key: string): string {
   return LABEL_MAP[key] ?? key
 }

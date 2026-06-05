@@ -89,19 +89,71 @@ export function buildApp(): Express {
       return
     }
 
-    const { data, error } = await supabase.auth.admin.listUsers()
-    if (error) {
-      res.status(500).json({ error: error.message })
+    if (id) {
+      const { data, error } = await supabase.auth.admin.getUserById(id)
+      if (error || !data.user) {
+        res.status(404).json({ error: 'User not found' })
+        return
+      }
+      res.json({ id: data.user.id, email: data.user.email })
       return
     }
 
-    const user = data.users.find((u) => (id ? u.id === id : u.email === email))
+    const perPage = 50
+    let page = 1
+    let user: { id: string; email: string } | null = null
+    while (page <= 20) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+      if (error) {
+        res.status(500).json({ error: error.message })
+        return
+      }
+      user = data.users.find((u) => u.email === email)
+        ? { id: data.users.find((u) => u.email === email)!.id, email: data.users.find((u) => u.email === email)!.email ?? '' }
+        : null
+      if (user || data.users.length < perPage) break
+      page++
+    }
+
     if (!user) {
       res.status(404).json({ error: 'User not found' })
       return
     }
 
     res.json({ id: user.id, email: user.email })
+  })
+
+  app.post('/api/users/lookup-batch', apiLimiter, async (req, res) => {
+    const auth = await requireSuperAdmin(req, res)
+    if (!auth) return
+
+    const ids = (req.body?.ids as string[] | undefined)?.filter((s) => typeof s === 'string' && s.length > 0)
+    if (!ids || ids.length === 0) {
+      res.status(400).json({ error: 'ids (string[]) required' })
+      return
+    }
+    if (ids.length > 200) {
+      res.status(400).json({ error: 'max 200 ids per request' })
+      return
+    }
+
+    const perPage = 50
+    const wanted = new Set(ids)
+    const found: Record<string, { id: string; email: string }> = {}
+    for (let page = 1; page <= 20; page++) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+      if (error) {
+        res.status(500).json({ error: error.message })
+        return
+      }
+      for (const u of data.users) {
+        if (wanted.has(u.id)) found[u.id] = { id: u.id, email: u.email ?? '' }
+        if (Object.keys(found).length === wanted.size) break
+      }
+      if (Object.keys(found).length === wanted.size || data.users.length < perPage) break
+    }
+
+    res.json({ users: found })
   })
 
   registerIotcenterRoutes(app)

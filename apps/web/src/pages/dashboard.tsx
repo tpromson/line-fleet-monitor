@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { supabase, flattenJoin } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
+import { useVisibilityPoll } from '@/hooks/use-visibility-poll'
 import { fetchBackend } from '@/lib/backend-api'
 import { StatCard } from '@/components/stat-card'
 import { toast } from 'sonner'
@@ -87,7 +88,7 @@ export function DashboardPage() {
         setProviders((data as unknown as ProviderRowData[]).map((p) => ({
           id: p.id,
           name: p.name,
-          organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,
+          organization: flattenJoin(p.organization)!,
           channels: (p.channels || []).map((c) => ({
             id: c.id,
             channel_name: c.channel_name,
@@ -109,16 +110,22 @@ export function DashboardPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- polling pattern: loads data on interval
     loadDashboard()
-    const interval = setInterval(() => { loadDashboard() }, 300000)
-    return () => clearInterval(interval)
   }, [loadDashboard])
+  useVisibilityPoll(() => { loadDashboard() }, 300000)
 
   const handleSync = async () => {
     setSyncing(true)
     try {
-      await fetchBackend('/api/sync', { method: 'POST' })
-      toast.success('Sync started — refreshing...')
-      setTimeout(() => { loadDashboard() }, 5000)
+      const res = await fetchBackend('/api/sync', { method: 'POST' })
+      if (!res.ok) {
+        toast.error(`Sync failed (${res.status})`)
+        return
+      }
+      toast.success('Sync started — will refresh in ~30s')
+      const delays = [5_000, 15_000, 30_000]
+      for (const ms of delays) {
+        setTimeout(() => { loadDashboard() }, ms)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Cannot reach backend')
     } finally { setSyncing(false) }

@@ -21,6 +21,7 @@ export async function checkAlerts() {
     .in('channel_id', channelIds)
     .is('error', null)
     .order('checked_at', { ascending: false })
+    .limit(channelIds.length * 4)
 
   const latestByChannel = new Map<string, number>()
   if (latestLogs) {
@@ -47,6 +48,7 @@ export async function checkAlerts() {
   }
 
   const alertsToInsert: Array<Record<string, unknown>> = []
+  const emailItems: Array<{ name: string; level: string; message: string }> = []
 
   for (const channel of channels) {
     const quotaUsed = latestByChannel.get(channel.id)
@@ -67,13 +69,22 @@ export async function checkAlerts() {
       message,
     })
 
-    await sendAlertEmail(ALERT_EMAIL_TO, `[LINE Fleet] ${newLevel.toUpperCase()}: ${channel.channel_name}`, message)
-
+    emailItems.push({ name: channel.channel_name, level: newLevel, message })
     console.log(`[alert] ${channel.channel_name}: ${newLevel} (${usagePct.toFixed(1)}%)`)
   }
 
   if (alertsToInsert.length > 0) {
     await supabase.from('alerts').insert(alertsToInsert)
+  }
+
+  if (emailItems.length > 0) {
+    const subject = emailItems.length === 1
+      ? `[LINE Fleet] ${emailItems[0].level.toUpperCase()}: ${emailItems[0].name}`
+      : `[LINE Fleet] ${emailItems.length} alerts (${emailItems.filter((i) => i.level === 'critical').length} critical)`
+    const body = emailItems.length === 1
+      ? emailItems[0].message
+      : emailItems.map((i) => i.message).join('\n\n---\n\n')
+    await sendAlertEmail(ALERT_EMAIL_TO, subject, body)
   }
 
   console.log('[alert] Check complete')
