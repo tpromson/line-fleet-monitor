@@ -455,7 +455,7 @@ export function IotcenterSourceDetailPage() {
                       fontSize: 13,
                       padding: '8px 12px',
                     }}
-                    formatter={(value: number) => [value.toFixed(1) + '°C', 'Temperature']}
+                    formatter={(value: number, name: string) => [value.toFixed(1) + (name === 'humidity' ? '%' : '°C'), name === 'humidity' ? 'Humidity' : 'Temperature']}
                     labelFormatter={(label: string) => label}
                   />
                   <ReferenceLine
