@@ -26,14 +26,21 @@ create index idx_public_configs_enabled on public_configs (enabled) where enable
 
 alter table public_configs enable row level security;
 
--- Anyone can view enabled configs (for public page)
+-- Anyone can view enabled configs (for public page - anonymous access)
 create policy "Anyone can view enabled public configs"
   on public_configs
   for select
   to authenticated, anon
   using (enabled = true);
 
--- Only super admins can manage public configs
+-- Super admins can view all configs (for management)
+create policy "Super admin can view all public configs"
+  on public_configs
+  for select
+  to authenticated
+  using (is_super_admin());
+
+-- Only super admins can insert/update/delete public configs
 create policy "Super admin can manage public configs"
   on public_configs
   for all
