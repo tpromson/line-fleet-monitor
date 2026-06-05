@@ -1,8 +1,28 @@
-import { useEffect, useState } from 'react'
-import { Thermometer, Snowflake } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { Thermometer, Snowflake, LineChartIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Link } from 'react-router-dom'
+import {
+  LineChart,
+  Line,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  ReferenceArea,
+} from 'recharts'
 
 interface TempWidget {
   sourceId: string
@@ -14,6 +34,13 @@ interface TempWidget {
   todayAvg: number | null
   threshold: number
   deviceStatus: string
+  showChart: boolean
+}
+
+interface TempLog {
+  timestamp: string
+  temperature: number
+  humidity?: number
 }
 
 function getTempColor(temp: number | null, threshold: number): string {
@@ -40,6 +67,11 @@ export function PublicIotcenterPage() {
   const [widgets, setWidgets] = useState<TempWidget[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedWidget, setSelectedWidget] = useState<TempWidget | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [chartRange, setChartRange] = useState<'1d' | '3d'>('1d')
+  const [chartData, setChartData] = useState<TempLog[]>([])
+  const [chartLoading, setChartLoading] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -57,35 +89,52 @@ export function PublicIotcenterPage() {
     load()
   }, [])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-muted/50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Temperature Overview</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="pt-4 pb-3">
-                  <div className="h-4 bg-muted rounded w-1/2 mb-2" />
-                  <div className="h-8 bg-muted rounded w-3/4" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
+  const loadChart = useCallback(async (sourceId: string, range: '1d' | '3d') => {
+    setChartLoading(true)
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/public/iotcenter/temperature/${sourceId}/chart?range=${range}`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setChartData(data.data || [])
+      } else {
+        setChartData([])
+      }
+    } catch {
+      setChartData([])
+    } finally {
+      setChartLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!dialogOpen || !selectedWidget) return
+    const widgetRef = { current: selectedWidget }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load chart data when dialog opens
+    loadChart(selectedWidget.sourceId, chartRange)
+    const interval = setInterval(() => {
+      if (widgetRef.current) {
+        loadChart(widgetRef.current.sourceId, chartRange)
+      }
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [dialogOpen, selectedWidget, chartRange, loadChart])
+
+  const openChart = (widget: TempWidget) => {
+    setSelectedWidget(widget)
+    setChartRange('1d')
+    setChartData([])
+    setDialogOpen(true)
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-muted/50 p-6 flex items-center justify-center">
-        <Card className="max-w-sm">
-          <CardContent className="py-6 text-center text-destructive">{error}</CardContent>
-        </Card>
-      </div>
-    )
+  const closeDialog = () => {
+    setDialogOpen(false)
+    setSelectedWidget(null)
+    setChartData([])
   }
+
+  const hasHumidity = chartData.some((d) => d.humidity !== undefined)
 
   return (
     <div className="min-h-screen bg-muted/50 p-6">
@@ -100,7 +149,22 @@ export function PublicIotcenterPage() {
           </Link>
         </div>
 
-        {widgets.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="pt-4 pb-3">
+                  <div className="h-4 bg-muted rounded w-1/2 mb-2" />
+                  <div className="h-8 bg-muted rounded w-3/4" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : error ? (
+          <Card>
+            <CardContent className="py-6 text-center text-destructive">{error}</CardContent>
+          </Card>
+        ) : widgets.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               No temperature data available
@@ -112,14 +176,16 @@ export function PublicIotcenterPage() {
               <Card
                 key={tw.sourceId}
                 className={
-                  tw.currentTemp !== null && tw.currentTemp >= tw.threshold
+                  (tw.showChart ? 'cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ' : '') +
+                  (tw.currentTemp !== null && tw.currentTemp >= tw.threshold
                     ? 'ring-1 ring-rose-200/70'
                     : tw.currentTemp !== null && tw.currentTemp >= tw.threshold * 0.9
                     ? 'ring-1 ring-amber-200/70'
                     : tw.currentTemp !== null && tw.currentTemp > 0
                     ? 'ring-1 ring-emerald-200/50'
-                    : ''
+                    : '')
                 }
+                onClick={() => tw.showChart && openChart(tw)}
               >
                 <CardContent className="pt-4 pb-3">
                   <div className="flex items-center justify-between mb-2">
@@ -136,6 +202,9 @@ export function PublicIotcenterPage() {
                       {tw.currentTemp !== null ? tw.currentTemp.toFixed(1) : '-'}
                     </span>
                     <span className="text-xs text-muted-foreground">°C</span>
+                    {tw.showChart && (
+                      <LineChartIcon className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                    )}
                   </div>
                   {tw.currentHumid !== null && tw.currentHumid > 0 && (
                     <div className="flex items-baseline gap-1 mb-1">
@@ -162,6 +231,143 @@ export function PublicIotcenterPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={closeDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{selectedWidget?.sourceName}</DialogTitle>
+          </DialogHeader>
+          {selectedWidget && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={chartRange === '1d' ? 'default' : 'outline'}
+                  onClick={() => setChartRange('1d')}
+                >
+                  Today
+                </Button>
+                <Button
+                  size="sm"
+                  variant={chartRange === '3d' ? 'default' : 'outline'}
+                  onClick={() => setChartRange('3d')}
+                >
+                  3 Days
+                </Button>
+              </div>
+              {chartLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : chartData.length === 0 ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  No data for this period
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="tempGradientPublic" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <ReferenceArea
+                      y1={selectedWidget.threshold}
+                      y2={Math.max(...chartData.map((d) => d.temperature)) + 5}
+                      fill="#fef2f2"
+                      stroke="none"
+                    />
+                    <XAxis
+                      dataKey="timestamp"
+                      fontSize={11}
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      axisLine={{ stroke: '#e2e8f0' }}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                      height={36}
+                    />
+                    <YAxis
+                      fontSize={12}
+                      unit="°C"
+                      domain={['auto', 'auto']}
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={45}
+                    />
+                    {hasHumidity && (
+                      <YAxis
+                        yAxisId="humidity"
+                        orientation="right"
+                        unit="%"
+                        domain={[0, 100]}
+                        tick={{ fontSize: 11, fill: '#06b6d4' }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={45}
+                      />
+                    )}
+                    <Tooltip
+                      cursor={{ stroke: '#94a3b8', strokeDasharray: '4 4', strokeWidth: 1 }}
+                      contentStyle={{
+                        background: '#fff',
+                        border: 'none',
+                        borderRadius: 10,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                        fontSize: 13,
+                        padding: '8px 12px',
+                      }}
+                      formatter={(value: number, name: string) => [
+                        value.toFixed(1) + (name === 'humidity' ? '%' : '°C'),
+                        name === 'humidity' ? 'Humidity' : 'Temperature',
+                      ]}
+                      labelFormatter={(label: string) => label}
+                    />
+                    <ReferenceLine
+                      y={selectedWidget.threshold}
+                      stroke="#ef4444"
+                      strokeDasharray="6 3"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `${selectedWidget.threshold}°C`,
+                        position: 'insideTopRight',
+                        fontSize: 11,
+                        fill: '#ef4444',
+                        fontWeight: 600,
+                      }}
+                    />
+                    <Area
+                      type="linear"
+                      dataKey="temperature"
+                      fill="url(#tempGradientPublic)"
+                      stroke="none"
+                    />
+                    <Line
+                      type="linear"
+                      dataKey="temperature"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 5, fill: '#ef4444', stroke: '#fff', strokeWidth: 2 }}
+                    />
+                    {hasHumidity && (
+                      <Line
+                        yAxisId="humidity"
+                        type="linear"
+                        dataKey="humidity"
+                        stroke="#06b6d4"
+                        strokeWidth={1.5}
+                        dot={false}
+                        activeDot={{ r: 4, fill: '#06b6d4', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

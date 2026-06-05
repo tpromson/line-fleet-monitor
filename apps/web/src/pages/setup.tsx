@@ -1194,6 +1194,7 @@ interface PublicConfigRow {
   show_humidity: boolean
   show_min_max: boolean
   show_avg: boolean
+  show_chart: boolean
   display_order: number
 }
 
@@ -1208,7 +1209,7 @@ function PublicConfigManager() {
     const [configsRes, sourcesRes] = await Promise.all([
       supabase
         .from('public_configs')
-        .select('id, source_id, enabled, display_name, show_temperature, show_humidity, show_min_max, show_avg, display_order, sources(name)')
+        .select('id, source_id, enabled, display_name, show_temperature, show_humidity, show_min_max, show_avg, show_chart, display_order, sources(name)')
         .order('display_order'),
       supabase.from('sources').select('id, name').eq('active', true).order('name'),
     ])
@@ -1225,6 +1226,7 @@ function PublicConfigManager() {
           show_humidity: c.show_humidity,
           show_min_max: c.show_min_max,
           show_avg: c.show_avg,
+          show_chart: c.show_chart,
           display_order: c.display_order,
         }))
       )
@@ -1260,6 +1262,7 @@ function PublicConfigManager() {
       show_humidity: true,
       show_min_max: true,
       show_avg: true,
+      show_chart: true,
       display_order: configs.length,
     })
     if (error) {
@@ -1350,6 +1353,15 @@ function PublicConfigManager() {
                             disabled={saving === cfg.id}
                           />
                           Avg
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={cfg.show_chart}
+                            onChange={(e) => updateConfig(cfg.id, 'show_chart', e.target.checked)}
+                            disabled={saving === cfg.id}
+                          />
+                          Chart
                         </label>
                         <input
                           type="number"

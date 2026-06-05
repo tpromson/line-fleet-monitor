@@ -130,7 +130,7 @@ export function registerIotcenterRoutes(app: Express) {
 
     const { data: configs } = await supabase
       .from('public_configs')
-      .select('source_id, display_name, show_temperature, show_humidity, show_min_max, show_avg, display_order')
+      .select('source_id, display_name, show_temperature, show_humidity, show_min_max, show_avg, show_chart, display_order')
       .eq('enabled', true)
       .order('display_order')
 
@@ -218,9 +218,65 @@ export function registerIotcenterRoutes(app: Express) {
         todayAvg: cfg.show_avg ? (dailyReport ? ((dailyReport.payload as Record<string, unknown>)?.avgTemp as number) ?? realtimeAvg : realtimeAvg) : null,
         threshold,
         deviceStatus: device?.status ?? 'unknown',
+        showChart: cfg.show_chart ?? true,
       })
     }
 
     res.json({ widgets })
+  })
+
+  app.get('/public/iotcenter/temperature/:sourceId/chart', async (req: Request, res: Response) => {
+    const { sourceId } = req.params
+    const range = req.query.range === '3d' ? '3d' : '1d'
+
+    const { data: config } = await supabase
+      .from('public_configs')
+      .select('source_id, show_chart, enabled')
+      .eq('source_id', sourceId)
+      .eq('enabled', true)
+      .single()
+
+    if (!config) {
+      res.status(404).json({ error: 'Source not found or not enabled' })
+      return
+    }
+
+    const since = new Date()
+    if (range === '3d') since.setDate(since.getDate() - 3)
+    else since.setDate(since.getDate() - 1)
+
+    const { data: events } = await supabase
+      .from('events')
+      .select('created_at, payload')
+      .eq('source_id', sourceId)
+      .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'heartbeat'])
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: true })
+
+    if (!events || events.length === 0) {
+      res.json({ data: [] })
+      return
+    }
+
+    const fmt = range === '1d'
+      ? (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    const chartData = events
+      .map((e) => {
+        const p = e.payload as Record<string, unknown>
+        const t = (p.temperature as number) ?? (p.lastTemperature as number)
+        if (typeof t !== 'number') return null
+        const item: { timestamp: string; temperature: number; humidity?: number } = {
+          timestamp: fmt(new Date(e.created_at)),
+          temperature: t,
+        }
+        const h = (p.humidity as number) ?? (p.lastHumidity as number)
+        if (typeof h === 'number' && h > 0) item.humidity = h
+        return item
+      })
+      .filter(Boolean) as { timestamp: string; temperature: number; humidity?: number }[]
+
+    res.json({ data: chartData })
   })
 }

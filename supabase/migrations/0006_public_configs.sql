@@ -11,6 +11,7 @@ create table public_configs (
   show_humidity boolean not null default true,
   show_min_max boolean not null default true,
   show_avg boolean not null default true,
+  show_chart boolean not null default true,
   display_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
