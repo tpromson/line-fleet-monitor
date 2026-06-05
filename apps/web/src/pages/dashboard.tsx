@@ -84,7 +84,7 @@ export function DashboardPage() {
       if (fetchError) throw new Error(fetchError.message)
 
       if (data) {
-        setProviders((data as ProviderRowData[]).map((p) => ({
+        setProviders((data as unknown as ProviderRowData[]).map((p) => ({
           id: p.id,
           name: p.name,
           organization: Array.isArray(p.organization) ? p.organization[0] : p.organization,

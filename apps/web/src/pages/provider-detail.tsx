@@ -74,7 +74,7 @@ export function ProviderDetailPage() {
         if (fetchError) throw new Error(fetchError.message)
 
         if (data) {
-          const d = data as ProviderRowData
+          const d = data as unknown as ProviderRowData
           setProvider({
             id: d.id,
             name: d.name,

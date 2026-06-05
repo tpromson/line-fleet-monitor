@@ -82,6 +82,7 @@ export function ChannelDetailPage() {
   const [channel, setChannel] = useState<ChannelDetail | null>(null)
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -162,6 +163,16 @@ export function ChannelDetailPage() {
       <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
+        <p className="text-destructive">{error}</p>
+        <Link to="/dashboard" className="text-sm text-primary hover:underline mt-2 inline-block">&larr; Back to Dashboard</Link>
       </div>
     )
   }
