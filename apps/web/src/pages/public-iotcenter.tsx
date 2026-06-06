@@ -155,10 +155,10 @@ export function PublicIotcenterPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Thermometer className="w-6 h-6" />
+            <Thermometer className="w-6 h-6 text-emerald-700" />
             {orgName ? `${orgName} - Temperature Overview` : 'Temperature Overview'}
           </h1>
-          <Link to="/login" className="text-sm text-muted-foreground hover:text-primary">
+          <Link to="/login" className="text-sm text-emerald-700 hover:text-emerald-800 font-medium">
             Login to manage
           </Link>
         </div>
@@ -180,16 +180,20 @@ export function PublicIotcenterPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">Temperature Chart</CardTitle>
                   <div className="flex items-center gap-1">
-                    {(Object.keys(DATE_LABELS) as DateRange[]).map((range) => (
-                      <Button
-                        key={range}
-                        variant={chartRange === range ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setChartRange(range)}
-                      >
-                        {DATE_LABELS[range]}
-                      </Button>
-                    ))}
+                    {(Object.keys(DATE_LABELS) as DateRange[]).map((range) => {
+                      const isActive = chartRange === range
+                      return (
+                        <Button
+                          key={range}
+                          variant={isActive ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => setChartRange(range)}
+                          className={isActive ? 'bg-emerald-700 text-white hover:bg-emerald-800' : ''}
+                        >
+                          {DATE_LABELS[range]}
+                        </Button>
+                      )
+                    })}
                   </div>
                 </div>
               </CardHeader>
@@ -205,8 +209,8 @@ export function PublicIotcenterPage() {
                     <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="tempGradientPublic" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#3d8a5f" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="#3d8a5f" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -284,10 +288,10 @@ export function PublicIotcenterPage() {
                       <Line
                         type="linear"
                         dataKey="temperature"
-                        stroke="#3b82f6"
+                        stroke="#3d8a5f"
                         strokeWidth={2}
                         dot={false}
-                        activeDot={{ r: 5, fill: '#ef4444', stroke: '#fff', strokeWidth: 2 }}
+                        activeDot={{ r: 5, fill: '#3d8a5f', stroke: '#fff', strokeWidth: 2 }}
                       />
                       {hasHumidity && (
                         <Line
@@ -370,7 +374,7 @@ export function PublicIotcenterPage() {
                   <Card
                     key={tw.sourceId}
                     className={
-                      (tw.showChart ? 'cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ' : '') +
+                      (tw.showChart ? 'cursor-pointer hover:shadow-md hover:scale-[1.02] hover:border-emerald-300 transition-all ' : '') +
                       (tw.currentTemp !== null && tw.currentTemp >= tw.threshold
                         ? 'ring-1 ring-rose-200/70'
                         : tw.currentTemp !== null && tw.currentTemp >= tw.threshold * 0.9

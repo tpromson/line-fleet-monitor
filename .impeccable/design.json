@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-06T00:00:00.000Z",
+  "title": "Design System: LINE Fleet Monitor",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Workshop Green",
+        "canonical": "oklch(52% 0.10 155)",
+        "tonalRamp": [
+          "oklch(20% 0.04 155)",
+          "oklch(28% 0.06 155)",
+          "oklch(36% 0.08 155)",
+          "oklch(44% 0.09 155)",
+          "oklch(52% 0.10 155)",
+          "oklch(64% 0.08 155)",
+          "oklch(78% 0.05 155)",
+          "oklch(95% 0.02 155)"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary-tint",
+        "displayName": "Workshop Green Soft",
+        "canonical": "oklch(95% 0.02 155)"
+      },
+      "primary-ink": {
+        "role": "primary-pressed",
+        "displayName": "Workshop Green Ink",
+        "canonical": "oklch(28% 0.08 155)"
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Page",
+        "canonical": "oklch(98% 0.005 155)"
+      },
+      "neutral-surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(100% 0 0)"
+      },
+      "neutral-border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "oklch(91% 0.005 155)"
+      },
+      "neutral-ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(15% 0 0)"
+      },
+      "state-online": {
+        "role": "state",
+        "displayName": "Online",
+        "canonical": "oklch(72% 0.16 160)"
+      },
+      "state-delayed": {
+        "role": "state",
+        "displayName": "Delayed",
+        "canonical": "oklch(76% 0.16 75)"
+      },
+      "state-offline": {
+        "role": "state",
+        "displayName": "Offline",
+        "canonical": "oklch(65% 0.22 18)"
+      },
+      "state-unknown": {
+        "role": "state",
+        "displayName": "Unknown",
+        "canonical": "oklch(70% 0.02 240)"
+      },
+      "state-frozen": {
+        "role": "state",
+        "displayName": "Frozen",
+        "canonical": "oklch(70% 0.14 220)"
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page-level h1 only." },
+      "headline": { "displayName": "Headline", "purpose": "Card titles, section headers in modals." },
+      "title": { "displayName": "Title", "purpose": "Sub-headers, table row labels, important inline labels." },
+      "body": { "displayName": "Body", "purpose": "Default UI body. 65-75ch for prose; data tables may run denser." },
+      "label": { "displayName": "Label", "purpose": "Buttons, column headers, badges, tabs. Sentence case." }
+    },
+    "shadows": [
+      { "name": "card-hover", "value": "0 1px 2px oklch(0% 0 0 / 4%)", "purpose": "Interactive card hover only." },
+      { "name": "popover", "value": "0 8px 24px oklch(0% 0 0 / 10%)", "purpose": "Dialogs, dropdowns, popovers." },
+      { "name": "modal-backdrop", "value": "0 24px 48px oklch(0% 0 0 / 16%)", "purpose": "Reserved for true modals." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default easing for state transitions." },
+      { "name": "duration-state", "value": "200ms", "purpose": "Hover, focus, active, selected state changes." },
+      { "name": "duration-reveal", "value": "300ms", "purpose": "Content reveal (load, tab switch, modal open)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Single primary action per screen. Workshop Green background, white text, 10px radius.",
+      "html": "<button class=\"ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn-primary { background: oklch(52% 0.10 155); color: #ffffff; padding: 8px 16px; border: none; border-radius: 10px; font-family: 'Geist Variable', sans-serif; font-size: 0.875rem; font-weight: 500; line-height: 1.5; cursor: pointer; transition: background 200ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { background: oklch(28% 0.08 155); } .ds-btn-primary:focus-visible { outline: 2px solid oklch(52% 0.10 155 / 40%); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "State Badge (Online)",
+      "kind": "chip",
+      "refersTo": "badge-state-online",
+      "description": "Tinted background at 95% lightness, dark text at 40% lightness, same hue. Paired with CheckCircle icon.",
+      "html": "<span class=\"ds-badge-online\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"></path><polyline points=\"22 4 12 14.01 9 11.01\"></polyline></svg>Online</span>",
+      "css": ".ds-badge-online { display: inline-flex; align-items: center; gap: 4px; background: oklch(95% 0.05 160); color: oklch(40% 0.12 160); padding: 4px 8px; border-radius: 6px; font-family: 'Geist Variable', sans-serif; font-size: 0.75rem; font-weight: 500; line-height: 1; letter-spacing: 0.01em; }"
+    },
+    {
+      "name": "State Badge (Offline)",
+      "kind": "chip",
+      "refersTo": "badge-state-offline",
+      "description": "Rose-tinted background, dark rose text. Paired with XCircle icon.",
+      "html": "<span class=\"ds-badge-offline\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"></line><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"></line></svg>Offline</span>",
+      "css": ".ds-badge-offline { display: inline-flex; align-items: center; gap: 4px; background: oklch(95% 0.05 15); color: oklch(45% 0.18 15); padding: 4px 8px; border-radius: 6px; font-family: 'Geist Variable', sans-serif; font-size: 0.75rem; font-weight: 500; line-height: 1; letter-spacing: 0.01em; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "White surface, hairline border, 10px radius. No shadow at rest. Card frame recedes so data values lead.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Card title</h3><p class=\"ds-card-body\">Body content sits on a true white surface. The frame is intentionally quiet.</p></div>",
+      "css": ".ds-card { background: #ffffff; border: 1px solid oklch(91% 0.005 155); border-radius: 10px; padding: 16px; } .ds-card-title { font-family: 'Geist Variable', sans-serif; font-size: 1.125rem; font-weight: 500; line-height: 1.4; color: oklch(15% 0 0); margin: 0 0 8px; } .ds-card-body { font-family: 'Geist Variable', sans-serif; font-size: 0.875rem; font-weight: 400; line-height: 1.5; color: oklch(15% 0 0); margin: 0; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Hairline border, white background, 10px radius. Label above the field. Focus darkens border and adds outer ring.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-example\">Field label</label><input class=\"ds-input\" id=\"ds-example\" type=\"text\" placeholder=\"Placeholder\"></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; } .ds-field-label { font-family: 'Geist Variable', sans-serif; font-size: 0.75rem; font-weight: 500; line-height: 1; letter-spacing: 0.01em; color: oklch(15% 0 0); } .ds-input { background: #ffffff; border: 1px solid oklch(91% 0.005 155); border-radius: 10px; padding: 8px 12px; font-family: 'Geist Variable', sans-serif; font-size: 0.875rem; font-weight: 400; line-height: 1.5; color: oklch(15% 0 0); transition: border-color 200ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-input::placeholder { color: oklch(55% 0.005 155); } .ds-input:hover { border-color: oklch(75% 0.01 155); } .ds-input:focus { outline: none; border-color: oklch(52% 0.10 155); box-shadow: 0 0 0 3px oklch(52% 0.10 155 / 30%); } .ds-input:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Temperature Widget Card",
+      "kind": "card",
+      "refersTo": "card-temperature",
+      "description": "Signature card. The reading is the loudest thing on the surface. 1px state ring (no left stripe) communicates threshold state.",
+      "html": "<div class=\"ds-temp-card\"><div class=\"ds-temp-card-header\"><span class=\"ds-temp-source\">Lab1Bloodbank</span><span class=\"ds-badge-online\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"></path><polyline points=\"22 4 12 14.01 9 11.01\"></polyline></svg>Online</span></div><div class=\"ds-temp-reading\">27.2°C</div><div class=\"ds-temp-stats\"><span class=\"ds-temp-stat\">🔺 27.2°C</span><span class=\"ds-temp-stat\">🔻 26.5°C</span><span class=\"ds-temp-stat\">▸ 26.85°C</span></div></div>",
+      "css": ".ds-temp-card { background: #ffffff; border: 1px solid oklch(91% 0.005 155); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; transition: border-color 200ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-temp-card:hover { border-color: oklch(52% 0.10 155 / 50%); } .ds-temp-card.is-over { border-color: oklch(65% 0.22 18); } .ds-temp-card.is-near { border-color: oklch(76% 0.16 75); } .ds-temp-card.is-frozen { border-color: oklch(70% 0.14 220); } .ds-temp-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .ds-temp-source { font-family: 'Geist Variable', sans-serif; font-size: 0.875rem; font-weight: 500; line-height: 1.4; color: oklch(15% 0 0); } .ds-temp-reading { font-family: 'Geist Variable', sans-serif; font-size: 2.25rem; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: oklch(15% 0 0); } .ds-temp-card.is-over .ds-temp-reading { color: oklch(65% 0.22 18); } .ds-temp-card.is-near .ds-temp-reading { color: oklch(76% 0.16 75); } .ds-temp-card.is-frozen .ds-temp-reading { color: oklch(70% 0.14 220); } .ds-temp-stats { display: flex; flex-wrap: wrap; gap: 12px; font-family: 'Geist Variable', sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.01em; color: oklch(40% 0 0); font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Workshop",
+    "overview": "LINE Fleet Monitor is a tool two very different people live in: a LINE OA admin who scans it ten times a day, and a lab/operations staff member who opens the public share page once per shift to check a fridge. Neither wants to be impressed. They want to know the truth in under three seconds. The system earns its place by being useful first, friendly second, beautiful last. Friendly means warm, rounded, legible on a phone screen in mixed lighting. It does not mean playful, decorated, or soft-headed. The visual restraint is the point: a tool that shouts for attention has already lost the user's trust. This product explicitly rejects the saturated AI default of 2026 (flat blue/violet monochrome), the SaaS landing-page vocabulary (hero metrics, glass cards, gradient text, eyebrow labels above every section), and the dated Thai enterprise look (warm gray with one dull accent, circa 2018). It also resists the terminal/hacker aesthetic that telemetry products often reach for. Operators here are not engineers running a NOC.",
+    "keyCharacteristics": [
+      "Restrained. Neutral surfaces dominate, brand color earns its place.",
+      "One family, all weights. Geist Variable across display, headline, body, and labels.",
+      "Soft geometry (10px base radius) on the chrome, crisp data values on the reading.",
+      "State colors are semantic, not decorative. Every color means something specific.",
+      "WCAG AA on every state indicator, with redundant icon + text labels."
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Brand green is used on \u226410% of any given screen. Its rarity is the point. If a screen feels \"green\", the accent has bled into the state vocabulary, which is a bug.", "section": "colors" },
+      { "name": "The State Has No Brand Rule", "body": "State colors (emerald/amber/rose/sky/gray) are never replaced by brand green even when green would look nicer. State means what it means; consistency beats aesthetics.", "section": "colors" },
+      { "name": "The Real Numbers Rule", "body": "Background, surface, and ink are all near-true neutral (chroma \u2264 0.015) so the data values, which carry the chroma, are the loudest thing on the page.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "No second typeface, no monospace exception. If a \"code-looking\" feel is needed, the label class is monospace-styled within Geist via font-variant-numeric: tabular-nums (numeric data) \u2014 the family stays the same.", "section": "typography" },
+      { "name": "The No All-Caps Rule", "body": "Sentence case everywhere. All-caps is reserved for short status chips and the rare, deliberate \"eyebrow\" label. Body copy and button labels never go uppercase.", "section": "typography" },
+      { "name": "The Tabular Numbers Rule", "body": "All numeric data (temperatures, percentages, dates, IDs) uses font-variant-numeric: tabular-nums so columns align in tables and the eye doesn't re-parse on every refresh.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. Shadows appear only as a response to state (hover, focus, elevation) or as the explicit visual cue for floating UI (popover, modal). A page with three or more shadowed cards is a page that's lost the plot.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do pair every state color with a redundant icon (CheckCircle, AlertTriangle, XCircle, Activity, Snowflake) and a text label. Color is never the only signal.",
+      "Do use font-variant-numeric: tabular-nums on all numeric data, all the time.",
+      "Do let the data values be the loudest thing on the page. Card frames recede.",
+      "Do test every state color on the actual card surface in real lighting. The 95%-lightness tints are calibrated to pass WCAG AA on white cards in glare.",
+      "Do keep the public share page chrome-free. The org name is the title; everything else is data.",
+      "Do use Sentence case for all UI text. Thai is the primary language; English is the technical term when it is the standard (Channel, Provider, Quota, Webhook).",
+      "Do use Workshop Green for the single primary action on a screen, the active nav indicator, and the brand wash on selected states. Nowhere else.",
+      "Do use the full state vocabulary for status (online / delayed / offline / unknown) without ever substituting the brand green for one of them."
+    ],
+    "donts": [
+      "Don't use border-left or border-right greater than 1px as a colored stripe. Ever. The state ring around a card is the answer; the left stripe is the anti-pattern.",
+      "Don't use gradient text (background-clip: text). Decorative, never meaningful.",
+      "Don't use glassmorphism (blurred translucent surfaces) as decoration. A modal backdrop is the only place blur is allowed, and only because it has a job.",
+      "Don't reach for the saturated 2026 AI palette. No flat blue (oklch(...) hue 240-280\u00b0) for primary, no violet, no purple-to-blue gradients. The product's primary is Workshop Green and that is the conversation.",
+      "Don't use hero-metric blocks (big number, small label, supporting stats) for non-metric content. Stat cards are for actual stats.",
+      "Don't put an all-caps tracked eyebrow label above every section. The 2023 SaaS template is the tell; use it zero times per page.",
+      "Don't use numbered section markers (01 / 02 / 03) above sections unless the section is genuinely a sequence and the order matters.",
+      "Don't use animated motion for entrance choreography. Motion conveys state change and feedback, nothing else. A page-load reveal that staggers every section is reflex, not design.",
+      "Don't impersonate Line's neon green. Stay in the green family at lower chroma, drift sage/sea-green, never #06C755.",
+      "Don't copy the dated Thai enterprise look. The neutral-warm-gray-with-one-accent admin panel of 2018 is not the look. We are not bland.",
+      "Don't reinvent standard affordances for flavor. Native dialogs, native form controls, native scrolling. The tool should disappear into the task."
+    ]
+  }
+}

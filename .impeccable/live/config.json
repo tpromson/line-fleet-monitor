@@ -1,0 +1,14 @@
+{
+  "serverPort": 8400,
+  "serverToken": "",
+  "pageFiles": [
+    {
+      "path": "apps/web/index.html",
+      "type": "vite"
+    }
+  ],
+  "exclude": [],
+  "commentSyntax": "html",
+  "insertBefore": "</body>",
+  "cspChecked": true
+}
