@@ -49,6 +49,7 @@ const DATE_LABELS: Record<DateRange, string> = {
 
 function getTempColor(temp: number | null, threshold: number): string {
   if (temp === null) return 'text-muted-foreground'
+  if (temp <= 0) return 'text-sky-500'
   if (temp >= threshold) return 'text-rose-500'
   if (temp >= threshold * 0.9) return 'text-amber-500'
   return 'text-emerald-500'
