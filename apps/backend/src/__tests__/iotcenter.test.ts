@@ -320,7 +320,7 @@ describe('iotcenter routes', () => {
       const eventsInsert = vi.fn().mockResolvedValue({ error: null })
       const outlierInsert = vi.fn()
       const device = setupDeviceMock({
-        id: 'dev-1', status: 'online', last_seen: new Date(Date.now() - 30 * 1000).toISOString(),
+        id: 'dev-1', status: 'online', last_seen: new Date(Date.now() - 5 * 1000).toISOString(),
       })
 
       mockSupabase.from.mockImplementation((table: string) => {
@@ -436,7 +436,7 @@ describe('iotcenter routes', () => {
       expect(eventsInsert).not.toHaveBeenCalled()
     })
 
-    it('filters 25°C heartbeat when device was online but last_seen gap > 60s (regression test)', async () => {
+    it('filters 25°C heartbeat when device was online but last_seen gap > 20s (regression test)', async () => {
       const eventsInsert = vi.fn()
       const outlierInsert = vi.fn().mockResolvedValue({ error: null })
       const deviceUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
@@ -483,14 +483,14 @@ describe('iotcenter routes', () => {
       expect(eventsInsert).not.toHaveBeenCalled()
     })
 
-    it('accepts 25°C heartbeat when device just heartbeat < 60s ago', async () => {
+    it('accepts 25°C heartbeat when device just heartbeat < 20s ago', async () => {
       const eventsInsert = vi.fn().mockResolvedValue({ error: null })
       const outlierInsert = vi.fn()
       const deviceUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
 
-      const thirtySecAgo = new Date(Date.now() - 30 * 1000).toISOString()
+      const fiveSecAgo = new Date(Date.now() - 5 * 1000).toISOString()
       const maybeSingle = vi.fn().mockResolvedValue({
-        data: { id: 'dev-1', status: 'online', last_seen: thirtySecAgo },
+        data: { id: 'dev-1', status: 'online', last_seen: fiveSecAgo },
         error: null,
       })
       const ilike = vi.fn().mockReturnValue({ maybeSingle })
@@ -526,6 +526,50 @@ describe('iotcenter routes', () => {
       expect(res.status).toBe(200)
       expect(eventsInsert).toHaveBeenCalled()
       expect(outlierInsert).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('GET /public/iotcenter/temperature/:sourceId/chart', () => {
+    function chartEventsAsc(events: { created_at: string; temperature: number }[]) {
+      return events
+    }
+
+    it('filters 25°C first-after-gap in ASCENDING order events (regression)', async () => {
+      const now = Date.now()
+      const events = [
+        { created_at: new Date(now - 60 * 60 * 1000).toISOString(), payload: { temperature: 4 } },
+        { created_at: new Date(now - 50 * 60 * 1000).toISOString(), payload: { temperature: 4 } },
+        { created_at: new Date(now - 5 * 60 * 1000).toISOString(), payload: { temperature: 25 } },
+        { created_at: new Date(now - 4 * 60 * 1000).toISOString(), payload: { temperature: 4 } },
+      ]
+
+      const eventsOrder = vi.fn().mockResolvedValue({ data: events, error: null })
+      const eventsGte = vi.fn().mockReturnValue({ order: eventsOrder })
+      const eventsIn = vi.fn().mockReturnValue({ gte: eventsGte })
+      const eventsEq = vi.fn().mockReturnValue({ in: eventsIn })
+      const eventsSelect = vi.fn().mockReturnValue({ eq: eventsEq })
+
+      const configSingle = vi.fn().mockResolvedValue({ data: { source_id: 'src-1' }, error: null })
+      const configEq2 = vi.fn().mockReturnValue({ single: configSingle })
+      const configEq1 = vi.fn().mockReturnValue({ eq: configEq2 })
+      const configSelect = vi.fn().mockReturnValue({ eq: configEq1 })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'public_configs') {
+          return { select: configSelect } as any
+        }
+        if (table === 'events') {
+          return { select: eventsSelect } as any
+        }
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/public/iotcenter/temperature/src-1/chart?range=1d`)
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      const temps = body.data.map((p: { temperature: number }) => p.temperature)
+      expect(temps).toEqual([4, 4, 4])
+      expect(temps).not.toContain(25)
     })
   })
 })

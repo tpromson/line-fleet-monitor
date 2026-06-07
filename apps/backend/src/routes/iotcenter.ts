@@ -135,26 +135,25 @@ async function wasDeviceRecentlyOffline(deviceId: string, sourceId: string): Pro
   return gap > OUTLIER_RECONNECT_GAP_MS
 }
 
-function isFirstEventAfterGap(events: EventRow[], index: number): boolean {
-  if (index === 0) return true
-  const prev = new Date(events[index - 1].created_at).getTime()
-  const curr = new Date(events[index].created_at).getTime()
-  return curr - prev > OUTLIER_RECONNECT_GAP_MS
-}
-
-function isOutlierAtIndex(events: EventRow[], index: number): boolean {
-  const e = events[index]
-  if (!hasTemperature(e.payload)) return false
-  const temp = readNumber(e.payload, 'temperature', 'lastTemperature')
+function isOutlierEvent(events: EventRow[], target: EventRow): boolean {
+  if (!hasTemperature(target.payload)) return false
+  const temp = readNumber(target.payload, 'temperature', 'lastTemperature')
   if (temp === null || !isReconnectOutlierTemp(temp)) return false
-  const next = events[index + 1]
-  const prevTime = next ? new Date(next.created_at).getTime() : null
-  const currTime = new Date(e.created_at).getTime()
-  return prevTime === null || currTime - prevTime > OUTLIER_RECONNECT_GAP_MS
+
+  const targetTime = new Date(target.created_at).getTime()
+  let prevTime: number | null = null
+  for (const e of events) {
+    if (e === target) continue
+    const t = new Date(e.created_at).getTime()
+    if (t < targetTime && (prevTime === null || t > prevTime)) {
+      prevTime = t
+    }
+  }
+  return prevTime === null || targetTime - prevTime > OUTLIER_RECONNECT_GAP_MS
 }
 
 function filterOutlierEvents(events: EventRow[]): EventRow[] {
-  return events.filter((_, i) => !isOutlierAtIndex(events, i))
+  return events.filter((e) => !isOutlierEvent(events, e))
 }
 
 function findLatestTempEvent(events: EventRow[]): EventRow | undefined {
