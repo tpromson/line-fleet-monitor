@@ -435,5 +435,97 @@ describe('iotcenter routes', () => {
       expect(outlierInsert).toHaveBeenCalledWith(expect.objectContaining({ reason: 'reconnect_25c' }))
       expect(eventsInsert).not.toHaveBeenCalled()
     })
+
+    it('filters 25°C heartbeat when device was online but last_seen gap > 60s (regression test)', async () => {
+      const eventsInsert = vi.fn()
+      const outlierInsert = vi.fn().mockResolvedValue({ error: null })
+      const deviceUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: { id: 'dev-1', status: 'online', last_seen: fiveMinAgo },
+        error: null,
+      })
+      const ilike = vi.fn().mockReturnValue({ maybeSingle })
+      const eq2 = vi.fn().mockReturnValue({ ilike, maybeSingle })
+      const eq1 = vi.fn().mockReturnValue({ eq: eq2, ilike, maybeSingle })
+      const select = vi.fn().mockReturnValue({ eq: eq1 })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'devices') return {
+          select,
+          update: deviceUpdate,
+          ilike,
+          eq: vi.fn().mockReturnThis(),
+        } as any
+        if (table === 'events') return { insert: eventsInsert } as any
+        if (table === 'outlier_logs') return { insert: outlierInsert } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/heartbeat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          device_name: 'fridge-1',
+          metadata: { temperature: 25, humidity: 60 },
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.status).toBe('filtered_outlier')
+      expect(outlierInsert).toHaveBeenCalledWith(expect.objectContaining({ reason: 'reconnect_25c' }))
+      expect(eventsInsert).not.toHaveBeenCalled()
+    })
+
+    it('accepts 25°C heartbeat when device just heartbeat < 60s ago', async () => {
+      const eventsInsert = vi.fn().mockResolvedValue({ error: null })
+      const outlierInsert = vi.fn()
+      const deviceUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+
+      const thirtySecAgo = new Date(Date.now() - 30 * 1000).toISOString()
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: { id: 'dev-1', status: 'online', last_seen: thirtySecAgo },
+        error: null,
+      })
+      const ilike = vi.fn().mockReturnValue({ maybeSingle })
+      const eq2 = vi.fn().mockReturnValue({ ilike, maybeSingle })
+      const eq1 = vi.fn().mockReturnValue({ eq: eq2, ilike, maybeSingle })
+      const select = vi.fn().mockReturnValue({ eq: eq1 })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'devices') return {
+          select,
+          update: deviceUpdate,
+          ilike,
+          eq: vi.fn().mockReturnThis(),
+        } as any
+        if (table === 'events') return { insert: eventsInsert } as any
+        if (table === 'outlier_logs') return { insert: outlierInsert } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/heartbeat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          device_name: 'fridge-1',
+          metadata: { temperature: 25, humidity: 60 },
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(eventsInsert).toHaveBeenCalled()
+      expect(outlierInsert).not.toHaveBeenCalled()
+    })
   })
 })

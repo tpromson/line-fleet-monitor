@@ -13,7 +13,7 @@ const publicLimiter = rateLimit({
 })
 
 const BANGKOK_TZ = 'Asia/Bangkok'
-const OUTLIER_RECONNECT_GAP_MS = parseInt(process.env.OUTLIER_RECONNECT_GAP_MS || '300000', 10)
+const OUTLIER_RECONNECT_GAP_MS = parseInt(process.env.OUTLIER_RECONNECT_GAP_MS || '60000', 10)
 const OUTLIER_RECONNECT_TEMP = Number(process.env.OUTLIER_RECONNECT_TEMP || 25)
 const OUTLIER_RECONNECT_TOLERANCE = 0.1
 
@@ -357,33 +357,40 @@ export function registerIotcenterRoutes(app: Express) {
 
     const { data: existing } = await supabase
       .from('devices')
-      .select('id')
+      .select('id, last_seen, status')
       .eq('source_id', source.sourceId)
       .ilike('device_name', device_name)
       .maybeSingle()
 
     if (existing) {
+      const isReconnect =
+        existing.status === 'offline' ||
+        !existing.last_seen ||
+        Date.now() - new Date(existing.last_seen).getTime() > OUTLIER_RECONNECT_GAP_MS
+
+      let filtered = false
+      if (isReconnect && hasTemperature(metadata)) {
+        const temp = readNumber(metadata, 'temperature', 'lastTemperature')
+        if (temp !== null && isReconnectOutlierTemp(temp)) {
+          await logOutlier({
+            sourceId: source.sourceId,
+            deviceId: existing.id,
+            eventType: 'heartbeat',
+            reason: 'reconnect_25c',
+            payload: metadata,
+          })
+          filtered = true
+        }
+      }
+
       await supabase
         .from('devices')
         .update({ status: 'online', last_seen: now, updated_at: now, ...(metadata ? { metadata } : {}) })
         .eq('id', existing.id)
 
-      if (hasTemperature(metadata)) {
-        const temp = readNumber(metadata, 'temperature', 'lastTemperature')
-        if (temp !== null && isReconnectOutlierTemp(temp)) {
-          const recentlyOffline = await wasDeviceRecentlyOffline(existing.id, source.sourceId)
-          if (recentlyOffline) {
-            await logOutlier({
-              sourceId: source.sourceId,
-              deviceId: existing.id,
-              eventType: 'heartbeat',
-              reason: 'reconnect_25c',
-              payload: metadata,
-            })
-            res.status(200).json({ status: 'filtered_outlier', reason: 'reconnect_25c' })
-            return
-          }
-        }
+      if (filtered) {
+        res.status(200).json({ status: 'filtered_outlier', reason: 'reconnect_25c' })
+        return
       }
 
       await supabase.from('events').insert({
