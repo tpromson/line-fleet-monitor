@@ -64,8 +64,8 @@ PORT=3001
 CORS_ORIGIN=https://line-fleet-monitor-web.vercel.app
 # Backend URL: https://line-fleetbackend-production.up.railway.app
 
-# iotcenter outlier filter (default: filter 25°C on first reading after a 60s gap)
-OUTLIER_RECONNECT_GAP_MS=60000
+# iotcenter outlier filter (default: filter 25°C on first reading after a 20s gap)
+OUTLIER_RECONNECT_GAP_MS=20000
 OUTLIER_RECONNECT_TEMP=25
 ```
 

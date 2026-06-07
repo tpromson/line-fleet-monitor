@@ -13,7 +13,7 @@ const publicLimiter = rateLimit({
 })
 
 const BANGKOK_TZ = 'Asia/Bangkok'
-const OUTLIER_RECONNECT_GAP_MS = parseInt(process.env.OUTLIER_RECONNECT_GAP_MS || '60000', 10)
+const OUTLIER_RECONNECT_GAP_MS = parseInt(process.env.OUTLIER_RECONNECT_GAP_MS || '20000', 10)
 const OUTLIER_RECONNECT_TEMP = Number(process.env.OUTLIER_RECONNECT_TEMP || 25)
 const OUTLIER_RECONNECT_TOLERANCE = 0.1
 
