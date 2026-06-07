@@ -264,4 +264,176 @@ describe('iotcenter routes', () => {
       expect(deviceUpdateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: 'online' }))
     })
   })
+
+  describe('outlier filter (25°C on reconnect)', () => {
+    function setupDeviceMock(deviceData: { id: string; status: string; last_seen: string } | null) {
+      const maybeSingle = vi.fn().mockResolvedValue({ data: deviceData, error: null })
+      const ilike = vi.fn().mockReturnValue({ maybeSingle })
+      const eq2 = vi.fn().mockReturnValue({ ilike, maybeSingle })
+      const eq1 = vi.fn().mockReturnValue({ eq: eq2, ilike, maybeSingle })
+      const select = vi.fn().mockReturnValue({ eq: eq1 })
+      return { select, eq1, eq2, ilike, maybeSingle }
+    }
+
+    it('filters 25°C on /events when device was recently offline', async () => {
+      const eventsInsert = vi.fn()
+      const outlierInsert = vi.fn().mockResolvedValue({ error: null })
+      const device = setupDeviceMock({
+        id: 'dev-1', status: 'offline', last_seen: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'devices') return {
+          select: device.select,
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        } as any
+        if (table === 'events') return { insert: eventsInsert } as any
+        if (table === 'outlier_logs') return { insert: outlierInsert } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          device_id: 'dev-1',
+          event_type: 'TEMP_NORMAL',
+          payload: { temperature: 25, humidity: 60 },
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.status).toBe('filtered_outlier')
+      expect(outlierInsert).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'reconnect_25c', temperature: 25, device_id: 'dev-1',
+      }))
+      expect(eventsInsert).not.toHaveBeenCalled()
+    })
+
+    it('accepts 25°C on /events when device is healthy', async () => {
+      const eventsInsert = vi.fn().mockResolvedValue({ error: null })
+      const outlierInsert = vi.fn()
+      const device = setupDeviceMock({
+        id: 'dev-1', status: 'online', last_seen: new Date(Date.now() - 30 * 1000).toISOString(),
+      })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'devices') return {
+          select: device.select,
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        } as any
+        if (table === 'events') return { insert: eventsInsert } as any
+        if (table === 'outlier_logs') return { insert: outlierInsert } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          device_id: 'dev-1',
+          event_type: 'TEMP_NORMAL',
+          payload: { temperature: 25, humidity: 60 },
+        }),
+      })
+
+      expect(res.status).toBe(201)
+      expect(eventsInsert).toHaveBeenCalled()
+      expect(outlierInsert).not.toHaveBeenCalled()
+    })
+
+    it('accepts non-25°C readings on reconnect', async () => {
+      const eventsInsert = vi.fn().mockResolvedValue({ error: null })
+      const outlierInsert = vi.fn()
+      const device = setupDeviceMock({
+        id: 'dev-1', status: 'offline', last_seen: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'devices') return {
+          select: device.select,
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+        } as any
+        if (table === 'events') return { insert: eventsInsert } as any
+        if (table === 'outlier_logs') return { insert: outlierInsert } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          device_id: 'dev-1',
+          event_type: 'TEMP_NORMAL',
+          payload: { temperature: 4.2, humidity: 60 },
+        }),
+      })
+
+      expect(res.status).toBe(201)
+      expect(eventsInsert).toHaveBeenCalled()
+      expect(outlierInsert).not.toHaveBeenCalled()
+    })
+
+    it('filters 25°C heartbeat when device was recently offline', async () => {
+      const eventsInsert = vi.fn()
+      const outlierInsert = vi.fn().mockResolvedValue({ error: null })
+      const deviceUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: { id: 'dev-1', status: 'offline', last_seen: new Date(Date.now() - 10 * 60 * 1000).toISOString() },
+        error: null,
+      })
+      const ilike = vi.fn().mockReturnValue({ maybeSingle })
+      const eq2 = vi.fn().mockReturnValue({ ilike, maybeSingle })
+      const eq1 = vi.fn().mockReturnValue({ eq: eq2, ilike, maybeSingle })
+      const select = vi.fn().mockReturnValue({ eq: eq1 })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'devices') return {
+          select,
+          update: deviceUpdate,
+          ilike,
+          eq: vi.fn().mockReturnThis(),
+        } as any
+        if (table === 'events') return { insert: eventsInsert } as any
+        if (table === 'outlier_logs') return { insert: outlierInsert } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/heartbeat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          device_name: 'fridge-1',
+          metadata: { temperature: 25, humidity: 60 },
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.status).toBe('filtered_outlier')
+      expect(outlierInsert).toHaveBeenCalledWith(expect.objectContaining({ reason: 'reconnect_25c' }))
+      expect(eventsInsert).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -13,6 +13,9 @@ const publicLimiter = rateLimit({
 })
 
 const BANGKOK_TZ = 'Asia/Bangkok'
+const OUTLIER_RECONNECT_GAP_MS = parseInt(process.env.OUTLIER_RECONNECT_GAP_MS || '300000', 10)
+const OUTLIER_RECONNECT_TEMP = Number(process.env.OUTLIER_RECONNECT_TEMP || 25)
+const OUTLIER_RECONNECT_TOLERANCE = 0.1
 
 type ConfigRow = {
   source_id: string
@@ -84,13 +87,97 @@ function hasTemperature(payload: unknown): boolean {
   return typeof obj.temperature === 'number' || typeof obj.lastTemperature === 'number'
 }
 
+function isReconnectOutlierTemp(t: number): boolean {
+  return Math.abs(t - OUTLIER_RECONNECT_TEMP) <= OUTLIER_RECONNECT_TOLERANCE
+}
+
+async function logOutlier(params: {
+  sourceId: string
+  deviceId: string | null
+  eventType: string
+  reason: string
+  payload: unknown
+}): Promise<void> {
+  const p = params.payload as Record<string, unknown> | null
+  const temperature = readNumber(p, 'temperature', 'lastTemperature')
+  const humidity = readNumber(p, 'humidity', 'lastHumidity')
+
+  const { error } = await supabase.from('outlier_logs').insert({
+    source_id: params.sourceId,
+    device_id: params.deviceId,
+    event_type: params.eventType,
+    reason: params.reason,
+    temperature,
+    humidity,
+    payload: params.payload || {},
+  })
+
+  if (error) {
+    console.error('[iotcenter] Failed to log outlier:', error.message)
+  } else {
+    console.log(
+      `[iotcenter] Filtered outlier: ${params.reason} temp=${temperature} device=${params.deviceId ?? 'n/a'}`
+    )
+  }
+}
+
+async function wasDeviceRecentlyOffline(deviceId: string, sourceId: string): Promise<boolean> {
+  const { data: device } = await supabase
+    .from('devices')
+    .select('status, last_seen')
+    .eq('id', deviceId)
+    .eq('source_id', sourceId)
+    .maybeSingle()
+
+  if (!device || !device.last_seen) return true
+  if (device.status === 'offline') return true
+  const gap = Date.now() - new Date(device.last_seen).getTime()
+  return gap > OUTLIER_RECONNECT_GAP_MS
+}
+
+function isFirstEventAfterGap(events: EventRow[], index: number): boolean {
+  if (index === 0) return true
+  const prev = new Date(events[index - 1].created_at).getTime()
+  const curr = new Date(events[index].created_at).getTime()
+  return curr - prev > OUTLIER_RECONNECT_GAP_MS
+}
+
+function isOutlierAtIndex(events: EventRow[], index: number): boolean {
+  const e = events[index]
+  if (!hasTemperature(e.payload)) return false
+  const temp = readNumber(e.payload, 'temperature', 'lastTemperature')
+  if (temp === null || !isReconnectOutlierTemp(temp)) return false
+  const next = events[index + 1]
+  const prevTime = next ? new Date(next.created_at).getTime() : null
+  const currTime = new Date(e.created_at).getTime()
+  return prevTime === null || currTime - prevTime > OUTLIER_RECONNECT_GAP_MS
+}
+
+function filterOutlierEvents(events: EventRow[]): EventRow[] {
+  return events.filter((_, i) => !isOutlierAtIndex(events, i))
+}
+
 function findLatestTempEvent(events: EventRow[]): EventRow | undefined {
-  return events.find(
-    (e) =>
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i]
+    const isTempEvent =
       e.event_type === 'TEMP_NORMAL' ||
       e.event_type === 'HIGH_TEMP' ||
       (e.event_type === 'heartbeat' && hasTemperature(e.payload))
-  )
+    if (!isTempEvent) continue
+
+    const temp = readNumber(e.payload, 'temperature', 'lastTemperature')
+    if (temp !== null && isReconnectOutlierTemp(temp)) {
+      const next = events[i + 1]
+      const prevTime = next ? new Date(next.created_at).getTime() : null
+      const currTime = new Date(e.created_at).getTime()
+      const isFirstAfterGap = prevTime === null || currTime - prevTime > OUTLIER_RECONNECT_GAP_MS
+      if (isFirstAfterGap) continue
+    }
+
+    return e
+  }
+  return undefined
 }
 
 function buildWidgets(
@@ -114,11 +201,12 @@ function buildWidgets(
     const currentHumid = tempEvent ? readNumber(tempEvent.payload, 'humidity', 'lastHumidity') : null
 
     const todayEvents = srcEvents.filter((e) => toBangkokDateStr(e.created_at) === todayStr)
+    const filteredTodayEvents = filterOutlierEvents(todayEvents)
     const dailyReport = srcEvents.find(
       (e) => e.event_type === 'DAILY_REPORT' && toBangkokDateStr(e.created_at) === todayStr
     )
 
-    const todayTemps = todayEvents
+    const todayTemps = filteredTodayEvents
       .map((e) => readNumber(e.payload, 'temperature', 'lastTemperature'))
       .filter((t): t is number => typeof t === 'number')
 
@@ -159,8 +247,9 @@ function buildChartData(events: { created_at: string; payload: unknown }[], rang
     ? (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: BANGKOK_TZ })
     : (d) => d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: BANGKOK_TZ })
 
+  const filtered = filterOutlierEvents(events as EventRow[])
   const out: ChartPoint[] = []
-  for (const e of events) {
+  for (const e of filtered) {
     const t = readNumber(e.payload, 'temperature', 'lastTemperature')
     if (typeof t !== 'number') continue
     const item: ChartPoint = { timestamp: fmt(new Date(e.created_at)), temperature: t }
@@ -207,6 +296,24 @@ export function registerIotcenterRoutes(app: Express) {
     if (!event_type) {
       res.status(400).json({ error: 'event_type is required' })
       return
+    }
+
+    if (device_id && hasTemperature(payload)) {
+      const temp = readNumber(payload, 'temperature', 'lastTemperature')
+      if (temp !== null && isReconnectOutlierTemp(temp)) {
+        const recentlyOffline = await wasDeviceRecentlyOffline(device_id, source.sourceId)
+        if (recentlyOffline) {
+          await logOutlier({
+            sourceId: source.sourceId,
+            deviceId: device_id,
+            eventType: event_type,
+            reason: 'reconnect_25c',
+            payload,
+          })
+          res.status(200).json({ status: 'filtered_outlier', reason: 'reconnect_25c' })
+          return
+        }
+      }
     }
 
     const { error } = await supabase.from('events').insert({
@@ -260,6 +367,24 @@ export function registerIotcenterRoutes(app: Express) {
         .from('devices')
         .update({ status: 'online', last_seen: now, updated_at: now, ...(metadata ? { metadata } : {}) })
         .eq('id', existing.id)
+
+      if (hasTemperature(metadata)) {
+        const temp = readNumber(metadata, 'temperature', 'lastTemperature')
+        if (temp !== null && isReconnectOutlierTemp(temp)) {
+          const recentlyOffline = await wasDeviceRecentlyOffline(existing.id, source.sourceId)
+          if (recentlyOffline) {
+            await logOutlier({
+              sourceId: source.sourceId,
+              deviceId: existing.id,
+              eventType: 'heartbeat',
+              reason: 'reconnect_25c',
+              payload: metadata,
+            })
+            res.status(200).json({ status: 'filtered_outlier', reason: 'reconnect_25c' })
+            return
+          }
+        }
+      }
 
       await supabase.from('events').insert({
         source_id: source.sourceId,
