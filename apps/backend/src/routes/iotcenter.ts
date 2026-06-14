@@ -499,7 +499,15 @@ export function registerIotcenterRoutes(app: Express) {
     const sourceIds = configs.map((c) => c.source_id)
     const { configs: fullConfigs, sources, events, devices } = await fetchWidgetData(sourceIds)
     const widgets = buildWidgets(fullConfigs, sources, events, devices)
-    res.json({ widgets })
+
+    const { data: recentEvents } = await supabase
+      .from('events')
+      .select('id, source_id, event_type, level, message, payload, created_at')
+      .in('source_id', sourceIds)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    res.json({ widgets, recentEvents: recentEvents ?? [] })
   })
 
   app.get('/public/iotcenter/:orgSlug/temperature', publicLimiter, async (req: Request, res: Response) => {
@@ -558,7 +566,15 @@ export function registerIotcenterRoutes(app: Express) {
 
     const { configs: fullConfigs, sources, events, devices } = await fetchWidgetData(sourceIds)
     const widgets = buildWidgets(fullConfigs, sources, events, devices)
-    res.json({ widgets, orgName: org.name })
+
+    const { data: recentEvents } = await supabase
+      .from('events')
+      .select('id, source_id, event_type, level, message, payload, created_at')
+      .in('source_id', sourceIds)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    res.json({ widgets, orgName: org.name, recentEvents: recentEvents ?? [] })
   })
 
   app.get('/public/iotcenter/temperature/:sourceId/chart', publicLimiter, async (req: Request, res: Response) => {

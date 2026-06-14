@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Thermometer, Snowflake, LineChartIcon, ArrowLeft } from 'lucide-react'
+import { Thermometer, Snowflake, LineChartIcon, ArrowLeft, Clock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,16 @@ interface TempWidget {
   threshold: number
   deviceStatus: string
   showChart: boolean
+}
+
+interface PublicEvent {
+  id: string
+  source_id: string
+  event_type: string
+  level: string | null
+  message: string | null
+  payload: Record<string, unknown>
+  created_at: string
 }
 
 interface TempLog {
@@ -73,6 +83,7 @@ export function PublicIotcenterPage() {
   const [searchParams] = useSearchParams()
   const group = searchParams.get('group')
   const [widgets, setWidgets] = useState<TempWidget[]>([])
+  const [recentEvents, setRecentEvents] = useState<PublicEvent[]>([])
   const [orgName, setOrgName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,6 +104,7 @@ export function PublicIotcenterPage() {
         if (!res.ok) throw new Error('Failed to fetch')
         const data = await res.json()
         setWidgets(data.widgets || [])
+        setRecentEvents(data.recentEvents || [])
         setOrgName(data.orgName || null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load')
@@ -144,6 +156,31 @@ export function PublicIotcenterPage() {
   const closeChart = () => {
     setSelectedWidget(null)
     setChartData([])
+  }
+
+  const sourceNameMap = Object.fromEntries(widgets.map((w) => [w.sourceId, w.sourceName]))
+
+  function eventLevelBadge(level: string) {
+    switch (level) {
+      case 'critical':
+        return <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-200 border-rose-200 text-[10px]">Critical</Badge>
+      case 'warning':
+        return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200 text-[10px]">Warning</Badge>
+      case 'recovery':
+        return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200 text-[10px]">Recovery</Badge>
+      default:
+        return null
+    }
+  }
+
+  function fmt(ts: string) {
+    const d = new Date(ts)
+    const now = new Date()
+    const diff = now.getTime() - d.getTime()
+    if (diff < 60000) return 'just now'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
   const hasHumidity = chartData.some((d) => d.humidity !== undefined)
@@ -430,6 +467,40 @@ export function PublicIotcenterPage() {
                   </Card>
                 ))}
               </div>
+            )}
+
+            {recentEvents.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Recent Events
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {recentEvents.map((ev) => (
+                      <div key={ev.id} className="flex items-start gap-3 py-2 border-b last:border-0 text-sm">
+                        <div className="shrink-0 mt-0.5">
+                          <Clock className="w-3 h-3 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{ev.event_type.replace(/_/g, ' ')}</span>
+                            {ev.level && eventLevelBadge(ev.level)}
+                          </div>
+                          {ev.message && <p className="text-muted-foreground mt-0.5">{ev.message}</p>}
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {sourceNameMap[ev.source_id] && <span className="font-medium">{sourceNameMap[ev.source_id]}</span>}
+                            {' · '}
+                            {fmt(ev.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </>
         )}
