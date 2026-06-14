@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy } from 'lucide-react'
+import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy, Zap } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Area, CartesianGrid } from 'recharts'
 import { humanLabel, formatPayloadValue, formatTimestamp } from '@/lib/labels'
 import { fetchBackend } from '@/lib/backend-api'
@@ -106,6 +106,9 @@ export function IotcenterSourceDetailPage() {
   const [hasHumidity, setHasHumidity] = useState(false)
   const [chartLoading, setChartLoading] = useState(false)
   const [eventFilter, setEventFilter] = useState<string>('all')
+  const [bootEvents, setBootEvents] = useState<EventRow[]>([])
+  const [bootCount24h, setBootCount24h] = useState(0)
+  const [bootCountTotal, setBootCountTotal] = useState(0)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -160,6 +163,21 @@ export function IotcenterSourceDetailPage() {
         .limit(50)
 
       setEvents(eventData || [])
+
+      const { data: bootData } = await supabase
+        .from('events')
+        .select('id, event_type, level, message, payload, created_at, device_id')
+        .eq('source_id', id)
+        .eq('event_type', 'DEVICE_BOOT')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      setBootEvents(bootData || [])
+
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const recentBoots = (bootData || []).filter((e) => e.created_at >= dayAgo)
+      setBootCount24h(recentBoots.length)
+      setBootCountTotal(bootData?.length || 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')
     } finally {
@@ -229,6 +247,13 @@ export function IotcenterSourceDetailPage() {
   const onlineCount = devices.filter((d) => d.status === 'online').length
   const offlineCount = devices.filter((d) => d.status === 'offline').length
   const delayedCount = devices.filter((d) => d.status === 'delayed').length
+
+  const lastBootByDevice = new Map<string, string>()
+  for (const ev of bootEvents) {
+    if (ev.device_id && !lastBootByDevice.has(ev.device_id)) {
+      lastBootByDevice.set(ev.device_id, ev.created_at)
+    }
+  }
 
   const latestTempEvent = events.find(
     (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
@@ -341,12 +366,14 @@ export function IotcenterSourceDetailPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { icon: <Monitor className="w-4 h-4" />, value: String(devices.length), label: 'Total Devices' },
           { icon: <CheckCircle className="w-4 h-4" />, value: String(onlineCount), label: 'Online' },
           { icon: <XCircle className="w-4 h-4" />, value: String(offlineCount), label: 'Offline' },
           { icon: <AlertTriangle className="w-4 h-4" />, value: String(delayedCount), label: 'Delayed' },
+          { icon: <Zap className="w-4 h-4" />, value: String(bootCount24h), label: 'Boots (24h)', warn: bootCount24h > 0 },
+          { icon: <Zap className="w-4 h-4" />, value: String(bootCountTotal), label: 'Boots (All)', warn: bootCountTotal > 0 },
         ].map((stat, i) => (
           <div key={stat.label} className="animate-slide-up-fade" style={{ animationDelay: `${i * 60}ms` }}>
             <StatCard icon={stat.icon} value={stat.value} label={stat.label} />
@@ -518,19 +545,33 @@ export function IotcenterSourceDetailPage() {
                     <th className="pb-2 font-medium">Type</th>
                     <th className="pb-2 font-medium">Status</th>
                     <th className="pb-2 font-medium">Last Seen</th>
+                    <th className="pb-2 font-medium">Last Boot</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map((d, i) => (
-                    <tr key={d.id} className="border-t animate-slide-up-fade hover:bg-muted/30 transition-colors" style={{ animationDelay: `${i * 50}ms` }}>
-                      <td className="py-2 font-medium">{d.device_name}</td>
-                      <td className="py-2 text-muted-foreground">{d.device_type}</td>
-                      <td className="py-2">{deviceStatusBadge(d.status)}</td>
-                      <td className="py-2 text-muted-foreground">
-                        {d.last_seen ? formatTimestamp(d.last_seen) : '-'}
-                      </td>
-                    </tr>
-                  ))}
+                  {devices.map((d, i) => {
+                    const lastBoot = lastBootByDevice.get(d.id)
+                    return (
+                      <tr key={d.id} className="border-t animate-slide-up-fade hover:bg-muted/30 transition-colors" style={{ animationDelay: `${i * 50}ms` }}>
+                        <td className="py-2 font-medium">{d.device_name}</td>
+                        <td className="py-2 text-muted-foreground">{d.device_type}</td>
+                        <td className="py-2">{deviceStatusBadge(d.status)}</td>
+                        <td className="py-2 text-muted-foreground">
+                          {d.last_seen ? formatTimestamp(d.last_seen) : '-'}
+                        </td>
+                        <td className="py-2">
+                          {lastBoot ? (
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <Zap className="w-3 h-3 text-amber-500" />
+                              {formatTimestamp(lastBoot)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -547,6 +588,7 @@ export function IotcenterSourceDetailPage() {
                 { key: 'all', label: 'All' },
                 { key: 'alert', label: 'Alerts' },
                 { key: 'temp', label: 'Temp' },
+                { key: 'boot', label: 'Boot' },
                 { key: 'report', label: 'Reports' },
                 { key: 'heartbeat', label: 'Heartbeats' },
               ].map((f) => (
@@ -572,6 +614,7 @@ export function IotcenterSourceDetailPage() {
                 if (eventFilter === 'all') return true
                 if (eventFilter === 'alert') return ev.level === 'warning' || ev.level === 'critical'
                 if (eventFilter === 'temp') return ev.event_type === 'TEMP_NORMAL' || ev.event_type === 'HIGH_TEMP'
+                if (eventFilter === 'boot') return ev.event_type === 'DEVICE_BOOT'
                 if (eventFilter === 'report') return ev.event_type.includes('REPORT')
                 if (eventFilter === 'heartbeat') return ev.event_type === 'heartbeat'
                 return true

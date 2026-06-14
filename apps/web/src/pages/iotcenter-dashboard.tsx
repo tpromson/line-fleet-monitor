@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer, Snowflake } from 'lucide-react'
+import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer, Snowflake, Zap } from 'lucide-react'
 import { formatTimestamp, todayInTz, dateStrInTz } from '@/lib/labels'
 import { useVisibilityPoll } from '@/hooks/use-visibility-poll'
 
@@ -81,6 +81,7 @@ export function IotcenterDashboardPage() {
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [emptyShiftSources, setEmptyShiftSources] = useState<Set<string>>(new Set())
+  const [bootEventsCount, setBootEventsCount] = useState(0)
 
   const load = useCallback(async () => {
     try {
@@ -140,6 +141,16 @@ export function IotcenterDashboardPage() {
         emptyShifts.add(ev.source_id)
       }
       setEmptyShiftSources(emptyShifts)
+
+      if (sourceIds.length > 0) {
+        const { count: bootCount } = await supabase
+          .from('events')
+          .select('*', { count: 'exact', head: true })
+          .in('source_id', sourceIds)
+          .eq('event_type', 'DEVICE_BOOT')
+          .gte('created_at', thirtyDaysAgo.toISOString())
+        setBootEventsCount(bootCount ?? 0)
+      }
 
       const eventsBySource = new Map<string, EventData[]>()
       for (const ev of (allEvents || []) as EventData[]) {
@@ -390,13 +401,14 @@ export function IotcenterDashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
             { icon: <Plug className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(totalSources), label: 'Sources', border: 'border-l-2 border-l-slate-300' },
             { icon: <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: onlineDevices + ' / ' + allDevices.length, label: 'Online Devices', border: 'border-l-2 border-l-emerald-400' },
             { icon: <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(offlineDevices), label: 'Offline Devices', warn: offlineDevices > 0, border: offlineDevices > 0 ? 'border-l-2 border-l-rose-400' : 'border-l-2 border-l-slate-200' },
             { icon: <AlertTriangle className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(delayedDevices), label: 'Delayed', warn: delayedDevices > 0, border: delayedDevices > 0 ? 'border-l-2 border-l-amber-400' : 'border-l-2 border-l-slate-200' },
             { icon: <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(alertCount), label: 'Active Alerts', warn: alertCount > 0, border: alertCount > 0 ? 'border-l-2 border-l-rose-400' : 'border-l-2 border-l-slate-200' },
+            { icon: <Zap className="w-4 h-4 group-hover:scale-110 transition-transform" />, value: String(bootEventsCount), label: 'Boots (30d)', warn: bootEventsCount > 0, border: bootEventsCount > 0 ? 'border-l-2 border-l-amber-400' : 'border-l-2 border-l-slate-200' },
           ].map((stat, i) => (
             <div key={stat.label} className={`animate-slide-up-fade group ${stat.border}`} style={{ animationDelay: `${i * 60}ms` }}>
               <StatCard icon={stat.icon} value={stat.value} label={stat.label} warn={stat.warn} />

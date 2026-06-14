@@ -290,7 +290,7 @@ export function registerIotcenterRoutes(app: Express) {
     const source = await requireApiKey(req, res)
     if (!source) return
 
-    const { device_id, event_type, level, message, payload } = req.body
+    const { device_id, device_name, event_type, level, message, payload } = req.body
 
     if (!event_type) {
       res.status(400).json({ error: 'event_type is required' })
@@ -336,6 +336,42 @@ export function registerIotcenterRoutes(app: Express) {
         .update({ status: 'online', last_seen: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq('id', device_id)
         .eq('source_id', source.sourceId)
+    }
+
+    if (event_type === 'DEVICE_BOOT') {
+      let resolvedId = device_id
+      if (!resolvedId && device_name) {
+        const { data: dev } = await supabase
+          .from('devices')
+          .select('id')
+          .eq('source_id', source.sourceId)
+          .ilike('device_name', device_name)
+          .maybeSingle()
+        if (dev) resolvedId = dev.id
+      }
+
+      if (resolvedId) {
+        const { data: device } = await supabase
+          .from('devices')
+          .select('metadata')
+          .eq('id', resolvedId)
+          .single()
+
+        const now = new Date().toISOString()
+        const currentMeta = (device?.metadata as Record<string, unknown>) || {}
+        const bootCount = ((currentMeta.boot_count as number) || 0) + 1
+
+        await supabase
+          .from('devices')
+          .update({
+            status: 'online',
+            last_seen: now,
+            updated_at: now,
+            metadata: { ...currentMeta, last_boot: now, boot_count: bootCount },
+          })
+          .eq('id', resolvedId)
+          .eq('source_id', source.sourceId)
+      }
     }
 
     res.status(201).json({ status: 'recorded' })
