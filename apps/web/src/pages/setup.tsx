@@ -853,6 +853,7 @@ function SourceManager() {
   const [typeId, setTypeId] = useState('')
   const [channelId, setChannelId] = useState('')
   const [threshold, setThreshold] = useState('')
+  const [group, setGroup] = useState('')
   const [createError, setCreateError] = useState('')
   const [saving, setSaving] = useState(false)
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
@@ -865,6 +866,7 @@ function SourceManager() {
   const [editTypeId, setEditTypeId] = useState('')
   const [editChannelId, setEditChannelId] = useState('')
   const [editThreshold, setEditThreshold] = useState('')
+  const [editGroup, setEditGroup] = useState('')
   const [editError, setEditError] = useState('')
   const { confirm, dialog: confirmDialog } = useConfirm()
 
@@ -914,10 +916,11 @@ function SourceManager() {
       source_type_id: typeId,
       name: name.trim(),
       channel_id: channelId || null,
-      metadata: { threshold: parseInt(threshold) || 0 },
+      metadata: { threshold: parseInt(threshold) || 0, ...(group.trim() ? { group: group.trim() } : {}) },
     })
     if (err) { setCreateError(err.message); setSaving(false); return }
     setName('')
+    setGroup('')
     setOpen(false)
 
     setCreateError('')
@@ -964,7 +967,8 @@ function SourceManager() {
     setEditOrgId(s.organization.id)
     setEditTypeId(s.source_type.id)
     setEditChannelId(s.channel_id || '')
-    setEditThreshold(String(s.metadata?.threshold || ''))
+    setEditThreshold(String((s.metadata as Record<string, unknown>)?.threshold ?? ''))
+    setEditGroup(String((s.metadata as Record<string, unknown>)?.group ?? ''))
     setEditError('')
     setEditOpen(true)
   }
@@ -972,12 +976,23 @@ function SourceManager() {
   const saveEdit = async () => {
     if (!editName.trim() || !editingId || !editOrgId || !editTypeId) return
     setEditError('')
+    const existing = sources.find((s) => s.id === editingId)
+    const currentMeta = (existing?.metadata ?? {}) as Record<string, unknown>
+    const metadata: Record<string, unknown> = {
+      ...currentMeta,
+      threshold: parseInt(editThreshold) || 0,
+    }
+    if (editGroup.trim()) {
+      metadata.group = editGroup.trim()
+    } else {
+      delete metadata.group
+    }
     const { error: err } = await supabase.from('sources').update({
       name: editName.trim(),
       organization_id: editOrgId,
       source_type_id: editTypeId,
       channel_id: editChannelId || null,
-      metadata: { threshold: parseInt(editThreshold) || 0 },
+      metadata,
       updated_at: new Date().toISOString(),
     }).eq('id', editingId)
     if (err) { setEditError(err.message); return }
@@ -1041,6 +1056,10 @@ function SourceManager() {
               <div className="space-y-2">
                 <Label htmlFor="src-threshold">Threshold (°C)</Label>
                 <Input id="src-threshold" type="number" value={threshold} onChange={(e: ChangeEvent<HTMLInputElement>) => setThreshold(e.target.value)} placeholder="8" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="src-group">Group</Label>
+                <Input id="src-group" value={group} onChange={(e: ChangeEvent<HTMLInputElement>) => setGroup(e.target.value)} placeholder="e.g. farm01" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="src-type">Source Type</Label>
@@ -1110,6 +1129,10 @@ function SourceManager() {
               <div className="space-y-2">
                 <Label htmlFor="edit-src-threshold">Threshold (°C)</Label>
                 <Input id="edit-src-threshold" type="number" value={editThreshold} onChange={(e: ChangeEvent<HTMLInputElement>) => setEditThreshold(e.target.value)} placeholder="8" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-src-group">Group</Label>
+                <Input id="edit-src-group" value={editGroup} onChange={(e: ChangeEvent<HTMLInputElement>) => setEditGroup(e.target.value)} placeholder="e.g. farm01" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-src-type">Source Type</Label>
@@ -1197,6 +1220,7 @@ function SourceManager() {
                   <p className="text-xs text-muted-foreground">
                     {s.organization.name} &middot; {s.source_type.display_name}
                     {s.channel_id && ` · ${channels.find((ch) => ch.id === s.channel_id)?.channel_name ?? 'Channel'}`}
+                    {(() => { const g = (s.metadata as Record<string, unknown>)?.group; return g ? ` · ${String(g)}` : null })()}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1236,6 +1260,7 @@ interface OrgSharingRow {
 
 function OrgSharingSettings() {
   const [orgs, setOrgs] = useState<OrgSharingRow[]>([])
+  const [groupsByOrg, setGroupsByOrg] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
 
@@ -1247,6 +1272,25 @@ function OrgSharingSettings() {
       .order('name')
     if (data) {
       setOrgs(data)
+      const orgIds = data.filter((o) => o.public_enabled).map((o) => o.id)
+      if (orgIds.length > 0) {
+        const { data: srcs } = await supabase
+          .from('sources')
+          .select('organization_id, metadata')
+          .in('organization_id', orgIds)
+          .not('metadata->>group', 'is', null)
+        if (srcs) {
+          const map: Record<string, string[]> = {}
+          for (const s of srcs) {
+            const g = (s.metadata as Record<string, unknown>)?.group
+            if (typeof g === 'string' && g) {
+              if (!map[s.organization_id]) map[s.organization_id] = []
+              if (!map[s.organization_id].includes(g)) map[s.organization_id].push(g)
+            }
+          }
+          setGroupsByOrg(map)
+        }
+      }
     }
     setLoading(false)
   }, [])
@@ -1280,10 +1324,12 @@ function OrgSharingSettings() {
     setSaving(null)
   }
 
-  const copyShareUrl = (slug: string) => {
-    const url = `${window.location.origin}/public/iotcenter/${slug}`
+  const copyShareUrl = (slug: string, group?: string) => {
+    const url = group
+      ? `${window.location.origin}/public/iotcenter/${slug}?group=${encodeURIComponent(group)}`
+      : `${window.location.origin}/public/iotcenter/${slug}`
     navigator.clipboard.writeText(url)
-    toast.success('Share URL copied!')
+    toast.success(`Share URL copied${group ? ` (${group})` : ''}!`)
   }
 
   if (loading) {
@@ -1308,58 +1354,75 @@ function OrgSharingSettings() {
       <CardContent>
         <div className="space-y-3">
           {orgs.map((org) => (
-            <div key={org.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border rounded-lg">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <select
-                  value={org.public_enabled ? 'yes' : 'no'}
-                  onChange={(e) => updateOrg(org.id, 'public_enabled', e.target.value === 'yes')}
-                  disabled={saving === org.id}
-                  className="text-sm border rounded px-2 py-1"
-                >
-                  <option value="yes">On</option>
-                  <option value="no">Off</option>
-                </select>
-                <span className="text-sm font-medium truncate">{org.name}</span>
-                {org.public_enabled && org.public_slug && (
-                  <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-600 border-emerald-200">
-                    {org.public_slug}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {org.public_enabled && (
-                  <>
-                    {org.public_slug ? (
-                      <>
+            <div key={org.id} className="p-3 border rounded-lg space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <select
+                    value={org.public_enabled ? 'yes' : 'no'}
+                    onChange={(e) => updateOrg(org.id, 'public_enabled', e.target.value === 'yes')}
+                    disabled={saving === org.id}
+                    className="text-sm border rounded px-2 py-1"
+                  >
+                    <option value="yes">On</option>
+                    <option value="no">Off</option>
+                  </select>
+                  <span className="text-sm font-medium truncate">{org.name}</span>
+                  {org.public_enabled && org.public_slug && (
+                    <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-600 border-emerald-200">
+                      {org.public_slug}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {org.public_enabled && (
+                    <>
+                      {org.public_slug ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyShareUrl(org.public_slug!)}
+                          >
+                            <Copy className="w-3 h-3 mr-1" /> Copy URL
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => regenerateSlug(org)}
+                            disabled={saving === org.id}
+                          >
+                            Regenerate
+                          </Button>
+                        </>
+                      ) : (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => copyShareUrl(org.public_slug!)}
-                        >
-                          <Copy className="w-3 h-3 mr-1" /> Copy URL
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
                           onClick={() => regenerateSlug(org)}
                           disabled={saving === org.id}
                         >
-                          Regenerate
+                          Generate URL
                         </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => regenerateSlug(org)}
-                        disabled={saving === org.id}
-                      >
-                        Generate URL
-                      </Button>
-                    )}
-                  </>
-                )}
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
+              {org.public_enabled && org.public_slug && groupsByOrg[org.id]?.length > 0 && (
+                <div className="flex flex-wrap gap-2 ml-2">
+                  {groupsByOrg[org.id].map((g) => (
+                    <Button
+                      key={g}
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={() => copyShareUrl(org.public_slug!, g)}
+                    >
+                      <Copy className="w-3 h-3 mr-1" /> {g}
+                    </Button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

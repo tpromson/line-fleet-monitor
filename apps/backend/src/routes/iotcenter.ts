@@ -504,6 +504,7 @@ export function registerIotcenterRoutes(app: Express) {
 
   app.get('/public/iotcenter/:orgSlug/temperature', publicLimiter, async (req: Request, res: Response) => {
     const { orgSlug } = req.params
+    const group = req.query.group as string | undefined
 
     const { data: org } = await supabase
       .from('organizations')
@@ -528,19 +529,33 @@ export function registerIotcenterRoutes(app: Express) {
     }
 
     const candidateIds = configs.map((c) => c.source_id)
-    const { data: orgSources } = await supabase
+    let query = supabase
       .from('sources')
-      .select('id')
+      .select('id, metadata')
       .in('id', candidateIds)
       .eq('active', true)
       .eq('organization_id', org.id)
+
+    const { data: orgSources } = await query
 
     if (!orgSources || orgSources.length === 0) {
       res.json({ widgets: [], orgName: org.name })
       return
     }
 
-    const sourceIds = orgSources.map((s) => s.id)
+    let sourceIds = orgSources.map((s) => s.id)
+
+    if (group) {
+      sourceIds = orgSources
+        .filter((s) => (s.metadata as Record<string, unknown> | null)?.group === group)
+        .map((s) => s.id)
+    }
+
+    if (sourceIds.length === 0) {
+      res.json({ widgets: [], orgName: org.name })
+      return
+    }
+
     const { configs: fullConfigs, sources, events, devices } = await fetchWidgetData(sourceIds)
     const widgets = buildWidgets(fullConfigs, sources, events, devices)
     res.json({ widgets, orgName: org.name })

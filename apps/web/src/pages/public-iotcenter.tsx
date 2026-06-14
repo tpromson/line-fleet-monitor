@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   LineChart,
   Line,
@@ -70,6 +70,8 @@ function deviceStatusBadge(status: string) {
 
 export function PublicIotcenterPage() {
   const { orgSlug } = useParams<{ orgSlug?: string }>()
+  const [searchParams] = useSearchParams()
+  const group = searchParams.get('group')
   const [widgets, setWidgets] = useState<TempWidget[]>([])
   const [orgName, setOrgName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,7 +83,7 @@ export function PublicIotcenterPage() {
 
   const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
   const tempEndpoint = orgSlug
-    ? `${baseUrl}/public/iotcenter/${orgSlug}/temperature`
+    ? `${baseUrl}/public/iotcenter/${orgSlug}/temperature${group ? `?group=${encodeURIComponent(group)}` : ''}`
     : `${baseUrl}/public/iotcenter/temperature`
 
   useEffect(() => {
@@ -157,6 +159,7 @@ export function PublicIotcenterPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Thermometer className="w-6 h-6 text-emerald-700" />
             {orgName ? `${orgName} - Temperature Overview` : 'Temperature Overview'}
+            {group && <span className="text-sm font-normal text-muted-foreground">· {group}</span>}
           </h1>
           <Link to="/login" className="text-sm text-emerald-700 hover:text-emerald-800 font-medium">
             Login to manage
