@@ -5,6 +5,7 @@ import { collectAllQuotas } from './collector.js'
 import { checkAlerts } from './alert-engine.js'
 import { checkAllWebhooks } from './webhook-monitor.js'
 import { detectOfflineDevices } from './iotcenter-health.js'
+import { sendDailyReport } from './daily-report.js'
 import { validateEnv } from './lib/env.js'
 
 if (process.env.SENTRY_DSN) {
@@ -60,9 +61,18 @@ cron.schedule('*/5 * * * *', () => {
     .finally(() => { offlineCheckRunning = false })
 })
 
+cron.schedule('0 7 * * *', () => {
+  console.log('[cron] Daily report triggered')
+  sendDailyReport().catch((err) => {
+    console.error('[cron] sendDailyReport error:', err)
+    Sentry.captureException(err, { tags: { context: 'cron-daily-report' } })
+  })
+})
+
 const server = app.listen(PORT, () => {
   console.log(`Backend service running on port ${PORT}`)
   console.log('[cron] Schedule: 00:00, 06:00, 12:00, 18:00')
+  console.log('[cron] Daily report: 07:00 UTC')
 
   runCollection().catch((err) => console.error('[startup] runCollection error:', err))
 })
