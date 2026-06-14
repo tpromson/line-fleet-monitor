@@ -51,11 +51,59 @@ interface SourceRaw {
 
 interface TempLog {
   timestamp: string
+  rawTs: number
   temperature: number
   humidity?: number
 }
 
+interface AlertBand {
+  x1: string
+  x2: string
+  level: 'warning' | 'critical'
+}
+
+interface AlertEvent {
+  created_at: string
+  level: string | null
+}
+
 type DateRange = '1d' | '3d' | '7d' | '30d'
+
+function buildAlertBands(events: AlertEvent[]): Array<{ start: number; end: number; level: 'warning' | 'critical' }> {
+  const bands: Array<{ start: number; end: number; level: 'warning' | 'critical' }> = []
+  let current: { start: number; end: number; level: 'warning' | 'critical' } | null = null
+
+  for (const e of events) {
+    const ts = new Date(e.created_at).getTime()
+    if (e.level === 'warning' || e.level === 'critical') {
+      if (!current) {
+        current = { start: ts, end: ts, level: e.level }
+      } else {
+        current.end = ts
+        if (e.level === 'critical') current.level = 'critical'
+      }
+    } else if (current) {
+      bands.push(current)
+      current = null
+    }
+  }
+  if (current) bands.push(current)
+  return bands
+}
+
+function snapToChart(ts: number, tempLogs: TempLog[]): string | null {
+  if (tempLogs.length === 0) return null
+  let nearest = tempLogs[0]
+  let minDiff = Math.abs(nearest.rawTs - ts)
+  for (let i = 1; i < tempLogs.length; i++) {
+    const diff = Math.abs(tempLogs[i].rawTs - ts)
+    if (diff < minDiff) {
+      nearest = tempLogs[i]
+      minDiff = diff
+    }
+  }
+  return nearest.timestamp
+}
 
 function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
@@ -101,6 +149,7 @@ export function IotcenterSourceDetailPage() {
 
   const [chartRange, setChartRange] = useState<DateRange>('7d')
   const [tempLogs, setTempLogs] = useState<TempLog[]>([])
+  const [alertBands, setAlertBands] = useState<AlertBand[]>([])
   const [chartThreshold, setChartThreshold] = useState(10)
   const [chartMax, setChartMax] = useState(30)
   const [hasHumidity, setHasHumidity] = useState(false)
@@ -190,13 +239,22 @@ export function IotcenterSourceDetailPage() {
     setChartLoading(true)
     const since = getDateSince(range)
 
-    const { data } = await supabase
-      .from('events')
-      .select('created_at, payload')
-      .eq('source_id', id)
-      .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'heartbeat'])
-      .gte('created_at', since.toISOString())
-      .order('created_at', { ascending: true })
+    const [tempRes, alertRes] = await Promise.all([
+      supabase
+        .from('events')
+        .select('created_at, payload')
+        .eq('source_id', id)
+        .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'heartbeat'])
+        .gte('created_at', since.toISOString())
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('events')
+        .select('created_at, level')
+        .eq('source_id', id)
+        .in('level', ['warning', 'critical'])
+        .gte('created_at', since.toISOString())
+        .order('created_at', { ascending: true }),
+    ])
 
     const fmt: (d: Date) => string = range === '1d'
       ? (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -204,6 +262,7 @@ export function IotcenterSourceDetailPage() {
       ? (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })
       : (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
+    const data = tempRes.data
     if (data) {
       const logs: TempLog[] = []
       let hasHumid = false
@@ -212,7 +271,8 @@ export function IotcenterSourceDetailPage() {
         const t = (p.temperature as number) ?? (p.lastTemperature as number)
         const h = (p.humidity as number) ?? (p.lastHumidity as number)
         if (typeof t === 'number') {
-          const log: TempLog = { timestamp: fmt(new Date(e.created_at)), temperature: t }
+          const ts = new Date(e.created_at)
+          const log: TempLog = { timestamp: fmt(ts), rawTs: ts.getTime(), temperature: t }
           if (typeof h === 'number' && h > 0) { log.humidity = h; hasHumid = true }
           logs.push(log)
         }
@@ -222,9 +282,22 @@ export function IotcenterSourceDetailPage() {
       if (logs.length > 0) {
         const maxT = Math.ceil(Math.max(...logs.map((l) => l.temperature)) + 5)
         setChartMax(maxT > srcThreshold + 2 ? maxT : srcThreshold + 2)
+
+        const alertEvents = (alertRes.data ?? []) as AlertEvent[]
+        const rawBands = buildAlertBands(alertEvents)
+        const chartBands: AlertBand[] = []
+        for (const b of rawBands) {
+          const x1 = snapToChart(b.start, logs)
+          const x2 = snapToChart(b.end, logs)
+          if (x1 && x2) chartBands.push({ x1, x2, level: b.level })
+        }
+        setAlertBands(chartBands)
+      } else {
+        setAlertBands([])
       }
     } else {
       setTempLogs([])
+      setAlertBands([])
     }
 
     setChartThreshold(srcThreshold || 10)
@@ -427,6 +500,26 @@ export function IotcenterSourceDetailPage() {
               <p className="text-center py-8 text-muted-foreground text-sm">No temperature data for this period</p>
             ) : (
               <div className="animate-fade-in">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 bg-blue-500 rounded-full" />
+                  <span>Temperature</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-400" />
+                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                  <span>Warning period</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-rose-100 border border-rose-400" />
+                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                  <span>Critical period</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-px border-t-2 border-dashed border-rose-500" />
+                  <span>Threshold ({chartThreshold}°C)</span>
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={tempLogs} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                   <defs>
@@ -442,6 +535,22 @@ export function IotcenterSourceDetailPage() {
                     fill="#fef2f2"
                     stroke="none"
                   />
+                  {alertBands.map((band, i) => (
+                    <ReferenceArea
+                      key={`alert-${i}-${band.x1}`}
+                      x1={band.x1}
+                      x2={band.x2}
+                      y1={-1000}
+                      y2={1000}
+                      fill={band.level === 'critical' ? '#fee2e2' : '#fef3c7'}
+                      fillOpacity={band.level === 'critical' ? 0.7 : 0.55}
+                      stroke={band.level === 'critical' ? '#f43f5e' : '#f59e0b'}
+                      strokeOpacity={0.45}
+                      strokeDasharray="2 2"
+                      strokeWidth={1}
+                      ifOverflow="extendDomain"
+                    />
+                  ))}
                   <XAxis
                     dataKey="timestamp"
                     fontSize={11}
