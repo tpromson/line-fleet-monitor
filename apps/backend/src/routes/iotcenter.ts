@@ -338,7 +338,7 @@ export function registerIotcenterRoutes(app: Express) {
         .eq('source_id', source.sourceId)
     }
 
-    if (event_type === 'DEVICE_BOOT') {
+    if (event_type === 'DEVICE_BOOT' || event_type === 'BOOT_WDT' || event_type === 'BOOT') {
       let resolvedId = device_id
       if (!resolvedId && device_name) {
         const { data: dev } = await supabase

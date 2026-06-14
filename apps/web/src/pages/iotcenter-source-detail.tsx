@@ -168,7 +168,7 @@ export function IotcenterSourceDetailPage() {
         .from('events')
         .select('id, event_type, level, message, payload, created_at, device_id')
         .eq('source_id', id)
-        .eq('event_type', 'DEVICE_BOOT')
+        .in('event_type', ['DEVICE_BOOT', 'BOOT_WDT', 'BOOT'])
         .order('created_at', { ascending: false })
         .limit(100)
 
@@ -614,7 +614,7 @@ export function IotcenterSourceDetailPage() {
                 if (eventFilter === 'all') return true
                 if (eventFilter === 'alert') return ev.level === 'warning' || ev.level === 'critical'
                 if (eventFilter === 'temp') return ev.event_type === 'TEMP_NORMAL' || ev.event_type === 'HIGH_TEMP'
-                if (eventFilter === 'boot') return ev.event_type === 'DEVICE_BOOT'
+                if (eventFilter === 'boot') return ev.event_type === 'DEVICE_BOOT' || ev.event_type === 'BOOT_WDT' || ev.event_type === 'BOOT'
                 if (eventFilter === 'report') return ev.event_type.includes('REPORT')
                 if (eventFilter === 'heartbeat') return ev.event_type === 'heartbeat'
                 return true

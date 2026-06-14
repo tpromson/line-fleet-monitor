@@ -147,7 +147,7 @@ export function IotcenterDashboardPage() {
           .from('events')
           .select('*', { count: 'exact', head: true })
           .in('source_id', sourceIds)
-          .eq('event_type', 'DEVICE_BOOT')
+          .in('event_type', ['DEVICE_BOOT', 'BOOT_WDT', 'BOOT'])
           .gte('created_at', thirtyDaysAgo.toISOString())
         setBootEventsCount(bootCount ?? 0)
       }
