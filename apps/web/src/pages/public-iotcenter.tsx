@@ -84,6 +84,7 @@ export function PublicIotcenterPage() {
   const group = searchParams.get('group')
   const [widgets, setWidgets] = useState<TempWidget[]>([])
   const [recentEvents, setRecentEvents] = useState<PublicEvent[]>([])
+  const [eventSourceFilter, setEventSourceFilter] = useState<string | null>(null)
   const [orgName, setOrgName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -472,14 +473,39 @@ export function PublicIotcenterPage() {
             {recentEvents.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    Recent Events
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Recent Events
+                    </CardTitle>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant={eventSourceFilter === null ? 'default' : 'ghost'}
+                        className="h-7 text-xs px-2"
+                        onClick={() => setEventSourceFilter(null)}
+                      >
+                        All
+                      </Button>
+                      {widgets.map((w) => (
+                        <Button
+                          key={w.sourceId}
+                          size="sm"
+                          variant={eventSourceFilter === w.sourceId ? 'default' : 'ghost'}
+                          className="h-7 text-xs px-2"
+                          onClick={() => setEventSourceFilter(w.sourceId)}
+                        >
+                          {w.sourceName}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {recentEvents.map((ev) => (
+                    {recentEvents
+                      .filter((ev) => !eventSourceFilter || ev.source_id === eventSourceFilter)
+                      .map((ev) => (
                       <div key={ev.id} className="flex items-start gap-3 py-2 border-b last:border-0 text-sm">
                         <div className="shrink-0 mt-0.5">
                           <Clock className="w-3 h-3 text-muted-foreground" />
