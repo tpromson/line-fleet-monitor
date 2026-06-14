@@ -6,7 +6,7 @@
       "npm": "@ai-sdk/anthropic",
       "options": {
         "baseURL": "https://api.minimax.io/anthropic",
-        "apiKey": "REMOVED"
+        "apiKey": "YOUR_MINIMAX_API_KEY"
       },
       "models": {
         "MiniMax-M3": {
