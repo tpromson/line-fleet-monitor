@@ -2,6 +2,7 @@ import express from 'express'
 import type { Express } from 'express'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import * as Sentry from '@sentry/node'
 import { collectAllQuotas } from './collector.js'
 import { checkAlerts } from './alert-engine.js'
 import { checkAllWebhooks } from './webhook-monitor.js'
@@ -57,9 +58,14 @@ export function buildApp(): Express {
     console.log('[api] Manual sync triggered')
     res.json({ status: 'started' })
 
-    await collectAllQuotas()
-    await checkAllWebhooks()
-    await checkAlerts()
+    try {
+      await collectAllQuotas()
+      await checkAllWebhooks()
+      await checkAlerts()
+    } catch (err) {
+      console.error('[api] Manual sync failed:', err)
+      Sentry.captureException(err, { tags: { context: 'manual-sync' } })
+    }
   })
 
   app.get('/api/channels/:id/webhook-test', apiLimiter, async (req, res) => {

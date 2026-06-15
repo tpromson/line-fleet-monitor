@@ -431,8 +431,6 @@ export async function sendDailyReport() {
   }
 
   const data = await collectReportData()
-  const { start } = yesterdayRange()
-  void start
 
   if (!data.hasData) {
     console.log('[daily-report] No data to report')
