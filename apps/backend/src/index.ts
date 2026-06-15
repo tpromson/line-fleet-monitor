@@ -61,7 +61,7 @@ cron.schedule('*/5 * * * *', () => {
     .finally(() => { offlineCheckRunning = false })
 })
 
-cron.schedule('0 7 * * *', () => {
+cron.schedule('0 1 * * *', () => {
   console.log('[cron] Daily report triggered')
   sendDailyReport().catch((err) => {
     console.error('[cron] sendDailyReport error:', err)
@@ -72,7 +72,7 @@ cron.schedule('0 7 * * *', () => {
 const server = app.listen(PORT, () => {
   console.log(`Backend service running on port ${PORT}`)
   console.log('[cron] Schedule: 00:00, 06:00, 12:00, 18:00')
-  console.log('[cron] Daily report: 07:00 UTC')
+  console.log('[cron] Daily report: 01:00 UTC (08:00 Bangkok)')
 
   runCollection().catch((err) => console.error('[startup] runCollection error:', err))
 })
