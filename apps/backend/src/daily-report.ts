@@ -92,36 +92,40 @@ async function collectReportData(): Promise<ReportData> {
   const totalLimit = channelQuotas.reduce((s, c) => s + c.limit, 0)
   const totalPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0
 
+  const orgIds = orgs.map((o) => o.id)
+
+  const { data: allSourcesRaw } = orgIds.length > 0
+    ? await supabase.from('sources').select('id, name, metadata, organization_id').eq('active', true).in('organization_id', orgIds).order('name')
+    : { data: [] as Array<{ id: string; name: string; metadata: unknown; organization_id: string }> }
+
+  const sources = (allSourcesRaw ?? []) as Array<{ id: string; name: string; metadata: unknown; organization_id: string }>
+  const sourceIds = sources.map((s) => s.id)
+
+  const [{ data: allEventsRaw }, { data: allDevicesRaw }] = sourceIds.length > 0
+    ? await Promise.all([
+        supabase
+          .from('events')
+          .select('source_id, event_type, level, payload, created_at')
+          .in('source_id', sourceIds)
+          .gte('created_at', start.toISOString())
+          .lt('created_at', end.toISOString())
+          .order('created_at', { ascending: false }),
+        supabase.from('devices').select('source_id, status').in('source_id', sourceIds),
+      ])
+    : [{ data: null }, { data: null }]
+
+  const allEvents = (allEventsRaw ?? []) as Array<{ source_id: string; event_type: string; level: string | null; payload: unknown; created_at: string }>
+  const allDevices = (allDevicesRaw ?? []) as Array<{ source_id: string; status: string }>
+
+  for (const e of allEvents) bucketAlert(e.created_at, e.level)
+
   const orgStats: OrgStats[] = []
   for (const org of orgs) {
-    const { data: sources } = await supabase
-      .from('sources')
-      .select('id, name, metadata')
-      .eq('organization_id', org.id)
-      .eq('active', true)
-      .order('name')
-
-    if (!sources || sources.length === 0) continue
-
-    const sourceIds = sources.map((s) => s.id)
-
-    const [{ data: events }, { data: devices }] = await Promise.all([
-      supabase
-        .from('events')
-        .select('source_id, event_type, level, payload, created_at')
-        .in('source_id', sourceIds)
-        .gte('created_at', start.toISOString())
-        .lt('created_at', end.toISOString())
-        .order('created_at', { ascending: false }),
-      supabase.from('devices').select('source_id, status').in('source_id', sourceIds),
-    ])
-
-    const allEvents = events ?? []
-    const allDevices = devices ?? []
-    for (const e of allEvents) bucketAlert(e.created_at, e.level)
+    const orgSources = sources.filter((s) => s.organization_id === org.id)
+    if (orgSources.length === 0) continue
 
     const srcStats: SourceStats[] = []
-    for (const src of sources) {
+    for (const src of orgSources) {
       const srcAllEvents = allEvents.filter((e) => e.source_id === src.id)
       const srcEvents = srcAllEvents.filter((e) => e.level === 'critical' || e.level === 'warning')
       const group = (src.metadata as Record<string, unknown> | null)?.group as string | undefined

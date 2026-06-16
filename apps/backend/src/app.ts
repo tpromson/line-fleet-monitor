@@ -20,7 +20,12 @@ function requireEnv(name: string): string {
 }
 
 export function buildApp(): Express {
-  const allowedOrigin = requireEnv('CORS_ORIGIN')
+  const allowedOrigins = new Set(
+    requireEnv('CORS_ORIGIN')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean)
+  )
 
   const app = express()
 
@@ -37,7 +42,11 @@ export function buildApp(): Express {
   })
 
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', allowedOrigin)
+    const origin = req.headers.origin
+    if (origin && allowedOrigins.has(origin)) {
+      res.header('Access-Control-Allow-Origin', origin)
+      res.header('Vary', 'Origin')
+    }
     res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type')
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     if (req.method === 'OPTIONS') {
@@ -114,9 +123,8 @@ export function buildApp(): Express {
         res.status(500).json({ error: error.message })
         return
       }
-      user = data.users.find((u) => u.email === email)
-        ? { id: data.users.find((u) => u.email === email)!.id, email: data.users.find((u) => u.email === email)!.email ?? '' }
-        : null
+      const found = data.users.find((u) => u.email === email)
+      if (found) user = { id: found.id, email: found.email ?? '' }
       if (user || data.users.length < perPage) break
       page++
     }

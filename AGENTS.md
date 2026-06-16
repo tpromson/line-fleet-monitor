@@ -62,6 +62,8 @@ ALERT_EMAIL_FROM=
 ALERT_EMAIL_TO=
 PORT=3001
 CORS_ORIGIN=https://line-fleet-monitor-web.vercel.app
+# CORS_ORIGIN supports multiple origins (comma-separated), e.g. for local dev + prod:
+# CORS_ORIGIN=https://line-fleet-monitor-web.vercel.app,http://localhost:5173
 # Backend URL: https://line-fleetbackend-production.up.railway.app
 
 # iotcenter outlier filter (default: filter 25°C on first reading after a 20s gap)

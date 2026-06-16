@@ -48,7 +48,7 @@ export async function checkAlerts() {
   }
 
   const alertsToInsert: Array<Record<string, unknown>> = []
-  const emailItems: Array<{ name: string; level: string; message: string }> = []
+  const emailItems: Array<{ name: string; level: AlertLevel; message: string }> = []
 
   for (const channel of channels) {
     const quotaUsed = latestByChannel.get(channel.id)
@@ -90,13 +90,15 @@ export async function checkAlerts() {
   console.log('[alert] Check complete')
 }
 
-function determineLevel(usagePct: number): 'recovery' | 'warning' | 'critical' {
+type AlertLevel = 'recovery' | 'warning' | 'critical'
+
+function determineLevel(usagePct: number): AlertLevel {
   if (usagePct >= 95) return 'critical'
   if (usagePct >= 80) return 'warning'
   return 'recovery'
 }
 
-function buildMessage(name: string, used: number, limit: number, level: string): string {
+function buildMessage(name: string, used: number, limit: number, level: AlertLevel): string {
   const remaining = limit - used
   if (level === 'recovery') {
     return `✅ ${name} — Quota back to normal (${used}/${limit}, ${remaining} remaining)`
