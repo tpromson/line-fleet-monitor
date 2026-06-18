@@ -261,8 +261,20 @@ function checkTemperatureAlert() {
     return;
   }
 
+  var lastTimestamp = sheet.getRange(lastRow, 1).getValue();
+  var lastDate = parseDate(lastTimestamp);
+  var dataAge = lastDate && !isNaN(lastDate.getTime())
+    ? (new Date().getTime() - lastDate.getTime()) / (1000 * 60)
+    : Infinity;
+
+  if (dataAge > 35) {
+    // ข้อมูลเก่าเกิน 35 นาที — ไม่ส่ง TEMP_NORMAL เพื่อไม่ให้ override สถานะ offline
+    IoTcenter.sendHeartbeat();
+    return;
+  }
+
   var currentTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue();
-  
+
   if (!isNaN(currentTemp) && currentTemp <= MAX_PLAUSIBLE_TEMP) {
     if (currentTemp >= THRESHOLD) {
       pushMessage("⚠️ แจ้งเตือน! อุณหภูมิสูงเกินกำหนด\n" +
