@@ -244,7 +244,7 @@ export function IotcenterSourceDetailPage() {
     const [tempRes, alertRes] = await Promise.all([
       supabase
         .from('events')
-        .select('created_at, payload')
+        .select('created_at, payload, event_type')
         .eq('source_id', id)
         .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'heartbeat'])
         .gte('created_at', since.toISOString())
