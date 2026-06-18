@@ -937,6 +937,13 @@ function iotcenterHeartbeat() {
   if (lastRow <= 1) { IoTcenter.sendHeartbeat(); return; }
 
   var row = sheet.getRange(lastRow, 1, 1, 5).getValues()[0];
+  var lastDate = row[0] instanceof Date ? row[0] : new Date(row[0]);
+  var dataAge = !isNaN(lastDate.getTime())
+    ? (new Date().getTime() - lastDate.getTime()) / (1000 * 60)
+    : Infinity;
+
+  if (dataAge > 35) return;
+
   var temp = parseFloat(row[2]);
   var payload = {};
   if (!isNaN(temp) && temp <= MAX_PLAUSIBLE_TEMP) payload.lastTemperature = temp;
