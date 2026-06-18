@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy, Zap } from 'lucide-react'
+import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Area, CartesianGrid } from 'recharts'
 import { humanLabel, formatPayloadValue, formatTimestamp } from '@/lib/labels'
 import { fetchBackend } from '@/lib/backend-api'
@@ -146,6 +146,8 @@ export function IotcenterSourceDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyValue, setApiKeyValue] = useState('')
+
+  const [siblings, setSiblings] = useState<{ id: string; name: string }[]>([])
 
   const [chartRange, setChartRange] = useState<DateRange>('7d')
   const [tempLogs, setTempLogs] = useState<TempLog[]>([])
@@ -322,6 +324,18 @@ export function IotcenterSourceDetailPage() {
     }
   }, [source, chartRange, loadChart])
 
+  useEffect(() => {
+    supabase
+      .from('sources')
+      .select('id, name')
+      .order('name')
+      .then(({ data }) => setSiblings(data ?? []))
+  }, [])
+
+  const currentIdx = siblings.findIndex((s) => s.id === id)
+  const prevSource = currentIdx > 0 ? siblings[currentIdx - 1] : null
+  const nextSource = currentIdx !== -1 && currentIdx < siblings.length - 1 ? siblings[currentIdx + 1] : null
+
   const onlineCount = devices.filter((d) => d.status === 'online').length
   const offlineCount = devices.filter((d) => d.status === 'offline').length
   const delayedCount = devices.filter((d) => d.status === 'delayed').length
@@ -391,10 +405,43 @@ export function IotcenterSourceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between">
         <Link to="/iotcenter" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
           <ArrowLeft className="w-3 h-3" /> IoTcenter
         </Link>
+        {siblings.length > 1 && (
+          <div className="flex items-center gap-1">
+            {prevSource ? (
+              <Link
+                to={`/iotcenter/sources/${prevSource.id}`}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span className="max-w-[120px] truncate">{prevSource.name}</span>
+              </Link>
+            ) : (
+              <span className="px-2 py-1 text-xs text-muted-foreground/40 flex items-center gap-1">
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground/50">
+              {currentIdx + 1} / {siblings.length}
+            </span>
+            {nextSource ? (
+              <Link
+                to={`/iotcenter/sources/${nextSource.id}`}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors"
+              >
+                <span className="max-w-[120px] truncate">{nextSource.name}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <span className="px-2 py-1 text-xs text-muted-foreground/40 flex items-center gap-1">
+                <ChevronRight className="w-3.5 h-3.5" />
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between">
