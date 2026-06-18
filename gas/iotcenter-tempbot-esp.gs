@@ -946,7 +946,7 @@ function iotcenterHeartbeat() {
 
   var temp = parseFloat(row[2]);
   var payload = {};
-  if (!isNaN(temp) && temp <= MAX_PLAUSIBLE_TEMP) payload.lastTemperature = temp;
+  if (!isNaN(temp) && temp <= MAX_PLAUSIBLE_TEMP) payload.temperature = temp;
 
   IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, payload);
 }
