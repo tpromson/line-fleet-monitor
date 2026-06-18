@@ -341,17 +341,21 @@ export function registerIotcenterRoutes(app: Express) {
     }
 
     if ((event_type === 'TEMP_NORMAL' || event_type === 'HIGH_TEMP') && device_id) {
+      const { data: devData } = await supabase.from('devices').select('metadata').eq('id', device_id).maybeSingle()
+      const devMeta = (devData?.metadata as Record<string, unknown>) || {}
       await supabase
         .from('devices')
-        .update({ status: 'online', last_seen: nowTs, updated_at: nowTs })
+        .update({ status: 'online', last_seen: nowTs, updated_at: nowTs, metadata: { ...devMeta, sensor_status: 'online' } })
         .eq('id', device_id)
         .eq('source_id', source.sourceId)
     }
 
     if ((event_type === 'SENSOR OFFLINE' || event_type === 'SENSOR_OFFLINE') && device_id) {
+      const { data: devData } = await supabase.from('devices').select('metadata').eq('id', device_id).maybeSingle()
+      const devMeta = (devData?.metadata as Record<string, unknown>) || {}
       await supabase
         .from('devices')
-        .update({ status: 'offline', updated_at: nowTs })
+        .update({ status: 'offline', updated_at: nowTs, metadata: { ...devMeta, sensor_status: 'offline' } })
         .eq('id', device_id)
         .eq('source_id', source.sourceId)
     }
@@ -410,7 +414,7 @@ export function registerIotcenterRoutes(app: Express) {
 
     const { data: existing } = await supabase
       .from('devices')
-      .select('id, last_seen, status')
+      .select('id, last_seen, status, metadata')
       .eq('source_id', source.sourceId)
       .ilike('device_name', device_name)
       .maybeSingle()
@@ -436,9 +440,20 @@ export function registerIotcenterRoutes(app: Express) {
         }
       }
 
+      const existingMeta = (existing.metadata as Record<string, unknown>) || {}
+      const sensorOffline = existingMeta.sensor_status === 'offline'
+      const mergedMeta = metadata
+        ? { ...existingMeta, ...metadata, sensor_status: existingMeta.sensor_status }
+        : existingMeta
+
       await supabase
         .from('devices')
-        .update({ status: 'online', last_seen: now, updated_at: now, ...(metadata ? { metadata } : {}) })
+        .update({
+          status: sensorOffline ? existing.status : 'online',
+          last_seen: now,
+          updated_at: now,
+          metadata: mergedMeta,
+        })
         .eq('id', existing.id)
 
       if (filtered) {
