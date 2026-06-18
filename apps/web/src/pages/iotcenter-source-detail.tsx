@@ -157,6 +157,8 @@ export function IotcenterSourceDetailPage() {
   const [hasHumidity, setHasHumidity] = useState(false)
   const [chartLoading, setChartLoading] = useState(false)
   const [eventFilter, setEventFilter] = useState<string>('all')
+  const [eventRange, setEventRange] = useState<DateRange>('1d')
+  const [eventLoading, setEventLoading] = useState(false)
   const [bootEvents, setBootEvents] = useState<EventRow[]>([])
   const [bootCount24h, setBootCount24h] = useState(0)
   const [bootCountTotal, setBootCountTotal] = useState(0)
@@ -206,15 +208,6 @@ export function IotcenterSourceDetailPage() {
 
       setDevices(deviceData || [])
 
-      const { data: eventData } = await supabase
-        .from('events')
-        .select('id, event_type, level, message, payload, created_at, device_id')
-        .eq('source_id', id)
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      setEvents(eventData || [])
-
       const { data: bootData } = await supabase
         .from('events')
         .select('id, event_type, level, message, payload, created_at, device_id')
@@ -234,6 +227,21 @@ export function IotcenterSourceDetailPage() {
     } finally {
       setLoading(false)
     }
+  }, [id])
+
+  const loadEvents = useCallback(async (range: DateRange) => {
+    if (!id) return
+    setEventLoading(true)
+    const since = getDateSince(range)
+    const { data } = await supabase
+      .from('events')
+      .select('id, event_type, level, message, payload, created_at, device_id')
+      .eq('source_id', id)
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(500)
+    setEvents(data || [])
+    setEventLoading(false)
   }, [id])
 
   const loadChart = useCallback(async (range: DateRange, srcThreshold: number) => {
@@ -323,6 +331,11 @@ export function IotcenterSourceDetailPage() {
       loadChart(chartRange, srcThreshold)
     }
   }, [source, chartRange, loadChart])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- event load on range change
+    loadEvents(eventRange)
+  }, [loadEvents, eventRange])
 
   useEffect(() => {
     supabase
@@ -742,8 +755,24 @@ export function IotcenterSourceDetailPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium">Recent Events</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">Recent Events</CardTitle>
+              <div className="flex items-center gap-0.5">
+                {(['1d', '3d', '7d'] as DateRange[]).map((r) => (
+                  <Button
+                    key={r}
+                    variant={eventRange === r ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setEventRange(r)}
+                    disabled={eventLoading}
+                    className="h-6 text-xs px-2"
+                  >
+                    {DATE_LABELS[r]}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="flex items-center gap-1">
               {[
                 { key: 'all', label: 'All' },
@@ -767,8 +796,10 @@ export function IotcenterSourceDetailPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {events.length === 0 ? (
-            <p className="text-center py-4 text-muted-foreground text-sm">No events yet</p>
+          {eventLoading ? (
+            <Skeleton className="h-32 w-full" />
+          ) : events.length === 0 ? (
+            <p className="text-center py-4 text-muted-foreground text-sm">No events in this period</p>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {events.filter((ev) => {
