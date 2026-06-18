@@ -330,10 +330,28 @@ export function registerIotcenterRoutes(app: Express) {
       return
     }
 
+    const nowTs = new Date().toISOString()
+
     if (event_type === 'heartbeat' && device_id) {
       await supabase
         .from('devices')
-        .update({ status: 'online', last_seen: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .update({ last_seen: nowTs, updated_at: nowTs })
+        .eq('id', device_id)
+        .eq('source_id', source.sourceId)
+    }
+
+    if ((event_type === 'TEMP_NORMAL' || event_type === 'HIGH_TEMP') && device_id) {
+      await supabase
+        .from('devices')
+        .update({ status: 'online', last_seen: nowTs, updated_at: nowTs })
+        .eq('id', device_id)
+        .eq('source_id', source.sourceId)
+    }
+
+    if ((event_type === 'SENSOR OFFLINE' || event_type === 'SENSOR_OFFLINE') && device_id) {
+      await supabase
+        .from('devices')
+        .update({ status: 'offline', updated_at: nowTs })
         .eq('id', device_id)
         .eq('source_id', source.sourceId)
     }
