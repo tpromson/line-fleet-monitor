@@ -340,7 +340,7 @@ export function registerIotcenterRoutes(app: Express) {
         .eq('source_id', source.sourceId)
     }
 
-    if ((event_type === 'TEMP_NORMAL' || event_type === 'HIGH_TEMP') && device_id) {
+    if ((event_type === 'TEMP_NORMAL' || event_type === 'HIGH_TEMP' || event_type === 'SENSOR_RECOVERY') && device_id) {
       const { data: devData } = await supabase.from('devices').select('metadata').eq('id', device_id).maybeSingle()
       const devMeta = (devData?.metadata as Record<string, unknown>) || {}
       await supabase

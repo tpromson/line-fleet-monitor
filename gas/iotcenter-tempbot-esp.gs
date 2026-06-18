@@ -1028,6 +1028,17 @@ function checkTemperatureAlert() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) { IoTcenter.sendHeartbeat(); return; }
 
+  var lastTimestamp = sheet.getRange(lastRow, 1).getValue();
+  var lastDate = parseDate(lastTimestamp);
+  var dataAge = lastDate && !isNaN(lastDate.getTime())
+    ? (new Date().getTime() - lastDate.getTime()) / (1000 * 60)
+    : Infinity;
+
+  if (dataAge > 35) {
+    IoTcenter.sendHeartbeat();
+    return;
+  }
+
   var currentTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue();
 
   if (!isNaN(currentTemp) && currentTemp <= MAX_PLAUSIBLE_TEMP) {
