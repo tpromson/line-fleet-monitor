@@ -268,8 +268,13 @@ export function IotcenterSourceDetailPage() {
       let hasHumid = false
       for (const e of data) {
         const p = e.payload as Record<string, unknown>
-        const t = (p.temperature as number) ?? (p.lastTemperature as number)
-        const h = (p.humidity as number) ?? (p.lastHumidity as number)
+        const isHeartbeat = e.event_type === 'heartbeat'
+        const t = isHeartbeat
+          ? (p.temperature as number | undefined)
+          : (p.temperature as number) ?? (p.lastTemperature as number)
+        const h = isHeartbeat
+          ? (p.humidity as number | undefined)
+          : (p.humidity as number) ?? (p.lastHumidity as number)
         if (typeof t === 'number') {
           const ts = new Date(e.created_at)
           const log: TempLog = { timestamp: fmt(ts), rawTs: ts.getTime(), temperature: t }
