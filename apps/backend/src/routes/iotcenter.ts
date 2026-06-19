@@ -332,22 +332,46 @@ export function registerIotcenterRoutes(app: Express) {
 
     const nowTs = new Date().toISOString()
 
-    if (event_type === 'heartbeat' && device_id) {
-      await supabase
-        .from('devices')
-        .update({ last_seen: nowTs, updated_at: nowTs })
-        .eq('id', device_id)
-        .eq('source_id', source.sourceId)
+    if (event_type === 'heartbeat') {
+      let resolvedId = device_id
+      if (!resolvedId && device_name) {
+        const { data: dev } = await supabase
+          .from('devices')
+          .select('id')
+          .eq('source_id', source.sourceId)
+          .ilike('device_name', device_name)
+          .maybeSingle()
+        if (dev) resolvedId = dev.id
+      }
+      if (resolvedId) {
+        await supabase
+          .from('devices')
+          .update({ status: 'online', last_seen: nowTs, updated_at: nowTs })
+          .eq('id', resolvedId)
+          .eq('source_id', source.sourceId)
+      }
     }
 
-    if ((event_type === 'TEMP_NORMAL' || event_type === 'HIGH_TEMP' || event_type === 'SENSOR_RECOVERY') && device_id) {
-      const { data: devData } = await supabase.from('devices').select('metadata').eq('id', device_id).maybeSingle()
-      const devMeta = (devData?.metadata as Record<string, unknown>) || {}
-      await supabase
-        .from('devices')
-        .update({ status: 'online', last_seen: nowTs, updated_at: nowTs, metadata: { ...devMeta, sensor_status: 'online' } })
-        .eq('id', device_id)
-        .eq('source_id', source.sourceId)
+    if (event_type === 'TEMP_NORMAL' || event_type === 'HIGH_TEMP' || event_type === 'SENSOR_RECOVERY') {
+      let resolvedId = device_id
+      if (!resolvedId && device_name) {
+        const { data: dev } = await supabase
+          .from('devices')
+          .select('id')
+          .eq('source_id', source.sourceId)
+          .ilike('device_name', device_name)
+          .maybeSingle()
+        if (dev) resolvedId = dev.id
+      }
+      if (resolvedId) {
+        const { data: devData } = await supabase.from('devices').select('metadata').eq('id', resolvedId).maybeSingle()
+        const devMeta = (devData?.metadata as Record<string, unknown>) || {}
+        await supabase
+          .from('devices')
+          .update({ status: 'online', last_seen: nowTs, updated_at: nowTs, metadata: { ...devMeta, sensor_status: 'online' } })
+          .eq('id', resolvedId)
+          .eq('source_id', source.sourceId)
+      }
     }
 
     if ((event_type === 'SENSOR OFFLINE' || event_type === 'SENSOR_OFFLINE') && device_id) {
