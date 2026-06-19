@@ -466,14 +466,17 @@ export function registerIotcenterRoutes(app: Express) {
 
       const existingMeta = (existing.metadata as Record<string, unknown>) || {}
       const sensorOffline = existingMeta.sensor_status === 'offline'
+      const temp = readNumber(metadata, 'temperature', 'lastTemperature')
+      const hasValidTemp = temp !== null && !isReconnectOutlierTemp(temp)
+      const newSensorStatus = hasValidTemp ? 'online' : (existingMeta.sensor_status ?? 'online')
       const mergedMeta = metadata
-        ? { ...existingMeta, ...metadata, sensor_status: existingMeta.sensor_status }
+        ? { ...existingMeta, ...metadata, sensor_status: newSensorStatus }
         : existingMeta
 
       await supabase
         .from('devices')
         .update({
-          status: sensorOffline ? existing.status : 'online',
+          status: hasValidTemp ? 'online' : (sensorOffline ? existing.status : 'online'),
           last_seen: now,
           updated_at: now,
           metadata: mergedMeta,
