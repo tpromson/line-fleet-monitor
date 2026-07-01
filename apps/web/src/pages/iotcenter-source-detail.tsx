@@ -317,26 +317,23 @@ export function IotcenterSourceDetailPage() {
           logs.push(log)
         }
       }
-      setTempLogs(logs)
+      const displayLogs = range === '30d' && logs.length > 1000
+        ? logs.filter((_, i) => i % Math.ceil(logs.length / 500) === 0)
+        : logs
+
+      setTempLogs(displayLogs)
       setHasHumidity(hasHumid)
 
-      if (range === '30d' && logs.length > 1000) {
-        const step = Math.ceil(logs.length / 500)
-        const sampled = logs.filter((_, i) => i % step === 0)
-        setTempLogs(sampled)
-        return
-      }
-
-      if (logs.length > 0) {
-        const maxT = Math.ceil(Math.max(...logs.map((l) => l.temperature)) + 5)
+      if (displayLogs.length > 0) {
+        const maxT = Math.ceil(Math.max(...displayLogs.map((l) => l.temperature)) + 5)
         setChartMax(maxT > srcThreshold + 2 ? maxT : srcThreshold + 2)
 
         const alertEvents = (alertRes.data ?? []) as AlertEvent[]
         const rawBands = buildAlertBands(alertEvents)
         const chartBands: AlertBand[] = []
         for (const b of rawBands) {
-          const x1 = snapToChart(b.start, logs)
-          const x2 = snapToChart(b.end, logs)
+          const x1 = snapToChart(b.start, displayLogs)
+          const x2 = snapToChart(b.end, displayLogs)
           if (x1 && x2) chartBands.push({ x1, x2, level: b.level })
         }
         setAlertBands(chartBands)
@@ -653,7 +650,7 @@ export function IotcenterSourceDetailPage() {
                     tick={{ fontSize: 10, fill: '#94a3b8' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                     tickLine={false}
-                    interval={chartRange === '1d' ? 'preserveStartEnd' : 'auto'}
+                    interval={chartRange === '1d' ? 'preserveStartEnd' : Math.max(1, Math.floor(tempLogs.length / 12))}
                     height={36}
                   />
                   <YAxis
