@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase, flattenJoin } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -146,6 +146,7 @@ export function IotcenterSourceDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyValue, setApiKeyValue] = useState('')
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   const [siblings, setSiblings] = useState<{ id: string; name: string }[]>([])
 
@@ -156,6 +157,7 @@ export function IotcenterSourceDetailPage() {
   const [chartMax, setChartMax] = useState(30)
   const [hasHumidity, setHasHumidity] = useState(false)
   const [chartLoading, setChartLoading] = useState(false)
+  const chartLoadId = useRef(0)
   const [eventFilter, setEventFilter] = useState<string>('all')
   const [eventRange, setEventRange] = useState<DateRange>('1d')
   const [eventLoading, setEventLoading] = useState(false)
@@ -187,8 +189,10 @@ export function IotcenterSourceDetailPage() {
         throw new Error(sourceError.message)
       }
 
+      let orgId: string | undefined
       if (sourceData) {
         const raw = sourceData as SourceRaw
+        orgId = (flattenJoin(raw.organization) as { id: string } | null)?.id
         setSource({
           id: raw.id,
           name: raw.name,
@@ -221,7 +225,25 @@ export function IotcenterSourceDetailPage() {
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       const recentBoots = (bootData || []).filter((e) => e.created_at >= dayAgo)
       setBootCount24h(recentBoots.length)
-      setBootCountTotal(bootData?.length || 0)
+
+      const { count: totalBootCount } = await supabase
+        .from('events')
+        .select('*', { count: 'exact', head: true })
+        .eq('source_id', id)
+        .in('event_type', ['DEVICE_BOOT', 'BOOT_WDT', 'BOOT'])
+      setBootCountTotal(totalBootCount ?? 0)
+
+      const { data: { user } } = await supabase.auth.getUser()
+      setIsSuperAdmin(user?.app_metadata?.role === 'super_admin')
+
+      if (orgId) {
+        const { data: sibData } = await supabase
+          .from('sources')
+          .select('id, name')
+          .eq('organization_id', orgId)
+          .order('name')
+        setSiblings(sibData ?? [])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')
     } finally {
@@ -246,6 +268,7 @@ export function IotcenterSourceDetailPage() {
 
   const loadChart = useCallback(async (range: DateRange, srcThreshold: number) => {
     if (!id) return
+    const loadId = ++chartLoadId.current
     setChartLoading(true)
     const since = getDateSince(range)
 
@@ -271,6 +294,8 @@ export function IotcenterSourceDetailPage() {
       : range === '30d'
       ? (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })
       : (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    if (loadId !== chartLoadId.current) return
 
     const data = tempRes.data
     if (data) {
@@ -315,8 +340,10 @@ export function IotcenterSourceDetailPage() {
       setAlertBands([])
     }
 
-    setChartThreshold(srcThreshold || 10)
-    setChartLoading(false)
+    if (loadId === chartLoadId.current) {
+      setChartThreshold(srcThreshold || 10)
+      setChartLoading(false)
+    }
   }, [id])
 
   useEffect(() => {
@@ -336,14 +363,6 @@ export function IotcenterSourceDetailPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- event load on range change
     loadEvents(eventRange)
   }, [loadEvents, eventRange])
-
-  useEffect(() => {
-    supabase
-      .from('sources')
-      .select('id, name')
-      .order('name')
-      .then(({ data }) => setSiblings(data ?? []))
-  }, [])
 
   const currentIdx = siblings.findIndex((s) => s.id === id)
   const prevSource = currentIdx > 0 ? siblings[currentIdx - 1] : null
@@ -411,7 +430,7 @@ export function IotcenterSourceDetailPage() {
     )
   }
 
-  const showTempChart = events.some(
+  const showTempChart = tempLogs.length > 0 || events.some(
     (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
       (e.event_type === 'heartbeat' && (e.payload?.temperature || e.payload?.lastTemperature))
   )
@@ -466,6 +485,8 @@ export function IotcenterSourceDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {!source.active && <Badge variant="outline">Paused</Badge>}
+          {isSuperAdmin && (
+            <>
           <button
             onClick={async () => {
               if (!showApiKey && !apiKeyValue) {
@@ -495,6 +516,8 @@ export function IotcenterSourceDetailPage() {
             >
               <Copy className="w-3 h-3 mr-1" /> Copy
             </Button>
+          )}
+            </>
           )}
         </div>
       </div>

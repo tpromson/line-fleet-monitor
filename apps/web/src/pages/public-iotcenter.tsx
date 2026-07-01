@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Thermometer, Snowflake, LineChartIcon, ArrowLeft, Clock } from 'lucide-react'
+import { Thermometer, Snowflake, LineChartIcon, ArrowLeft, Clock, Droplets, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -453,21 +453,21 @@ export function PublicIotcenterPage() {
                       </div>
                       {tw.currentHumid !== null && tw.currentHumid > 0 && (
                         <div className="flex items-baseline gap-1 mb-1">
-                          <span className="text-sm font-medium text-sky-500">
-                            💧 {tw.currentHumid.toFixed(1)}
+                          <span className="text-sm font-medium text-sky-500 flex items-center gap-0.5">
+                            <Droplets className="w-3.5 h-3.5" /> {tw.currentHumid.toFixed(1)}
                           </span>
                           <span className="text-[10px] text-muted-foreground">%</span>
                         </div>
                       )}
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>
-                          🔺 {tw.todayMax !== null ? tw.todayMax.toFixed(1) + '°C' : '-'}
+                        <span className="flex items-center gap-0.5">
+                          <TrendingUp className="w-3 h-3" /> {tw.todayMax !== null ? tw.todayMax.toFixed(1) + '°C' : '-'}
                         </span>
-                        <span>
-                          🔻 {tw.todayMin !== null ? tw.todayMin.toFixed(1) + '°C' : '-'}
+                        <span className="flex items-center gap-0.5">
+                          <TrendingDown className="w-3 h-3" /> {tw.todayMin !== null ? tw.todayMin.toFixed(1) + '°C' : '-'}
                         </span>
-                        <span>
-                          ▸ {tw.todayAvg !== null ? tw.todayAvg.toFixed(1) + '°C' : '-'}
+                        <span className="flex items-center gap-0.5">
+                          <Minus className="w-3 h-3" /> {tw.todayAvg !== null ? tw.todayAvg.toFixed(1) + '°C' : '-'}
                         </span>
                       </div>
                     </CardContent>
