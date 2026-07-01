@@ -272,32 +272,41 @@ export function IotcenterSourceDetailPage() {
     setChartLoading(true)
     const since = getDateSince(range)
 
-    const [tempRes, alertRes] = await Promise.all([
-      supabase
+    const numDays = range === '1d' ? 1 : range === '3d' ? 3 : range === '7d' ? 7 : 30
+
+    const dayPromises = Array.from({ length: numDays }, (_, i) => {
+      const start = new Date(since)
+      start.setDate(start.getDate() + i)
+      const end = new Date(start)
+      end.setDate(end.getDate() + 1)
+      return supabase
         .from('events')
         .select('created_at, payload, event_type')
         .eq('source_id', id)
         .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'heartbeat'])
-        .gte('created_at', since.toISOString())
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
         .order('created_at', { ascending: true })
-        .limit(50000),
+    })
+
+    const [alertRes, ...tempResults] = await Promise.all([
       supabase
         .from('events')
         .select('created_at, level')
         .eq('source_id', id)
         .in('level', ['warning', 'critical'])
         .gte('created_at', since.toISOString())
-        .order('created_at', { ascending: true })
-        .limit(50000),
+        .order('created_at', { ascending: true }),
+      ...dayPromises,
     ])
 
     if (loadId !== chartLoadId.current) return
 
-    const data = tempRes.data
-    if (data) {
+    const allData = tempResults.flatMap((r) => r.data ?? [])
+    if (allData.length > 0) {
       const logs: TempLog[] = []
       let hasHumid = false
-      for (const e of data) {
+      for (const e of allData) {
         const p = e.payload as Record<string, unknown>
         const isHeartbeat = e.event_type === 'heartbeat'
         const t = isHeartbeat
