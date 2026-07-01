@@ -279,14 +279,16 @@ export function IotcenterSourceDetailPage() {
         .eq('source_id', id)
         .in('event_type', ['TEMP_NORMAL', 'HIGH_TEMP', 'heartbeat'])
         .gte('created_at', since.toISOString())
-        .order('created_at', { ascending: true }),
+        .order('created_at', { ascending: true })
+        .limit(50000),
       supabase
         .from('events')
         .select('created_at, level')
         .eq('source_id', id)
         .in('level', ['warning', 'critical'])
         .gte('created_at', since.toISOString())
-        .order('created_at', { ascending: true }),
+        .order('created_at', { ascending: true })
+        .limit(50000),
     ])
 
     if (loadId !== chartLoadId.current) return
