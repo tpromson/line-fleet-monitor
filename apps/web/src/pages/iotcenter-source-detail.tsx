@@ -319,6 +319,14 @@ export function IotcenterSourceDetailPage() {
       }
       setTempLogs(logs)
       setHasHumidity(hasHumid)
+
+      if (range === '30d' && logs.length > 1000) {
+        const step = Math.ceil(logs.length / 500)
+        const sampled = logs.filter((_, i) => i % step === 0)
+        setTempLogs(sampled)
+        return
+      }
+
       if (logs.length > 0) {
         const maxT = Math.ceil(Math.max(...logs.map((l) => l.temperature)) + 5)
         setChartMax(maxT > srcThreshold + 2 ? maxT : srcThreshold + 2)
@@ -645,7 +653,7 @@ export function IotcenterSourceDetailPage() {
                     tick={{ fontSize: 10, fill: '#94a3b8' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                     tickLine={false}
-                    interval="preserveStartEnd"
+                    interval={chartRange === '1d' ? 'preserveStartEnd' : 'auto'}
                     height={36}
                   />
                   <YAxis
