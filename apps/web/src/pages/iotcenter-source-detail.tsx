@@ -57,8 +57,8 @@ interface TempLog {
 }
 
 interface AlertBand {
-  x1: string
-  x2: string
+  x1: number
+  x2: number
   level: 'warning' | 'critical'
 }
 
@@ -91,7 +91,7 @@ function buildAlertBands(events: AlertEvent[]): Array<{ start: number; end: numb
   return bands
 }
 
-function snapToChart(ts: number, tempLogs: TempLog[]): string | null {
+function snapToChart(ts: number, tempLogs: TempLog[]): number | null {
   if (tempLogs.length === 0) return null
   let nearest = tempLogs[0]
   let minDiff = Math.abs(nearest.rawTs - ts)
@@ -102,7 +102,7 @@ function snapToChart(ts: number, tempLogs: TempLog[]): string | null {
       minDiff = diff
     }
   }
-  return nearest.timestamp
+  return nearest.rawTs
 }
 
 function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
@@ -289,12 +289,6 @@ export function IotcenterSourceDetailPage() {
         .order('created_at', { ascending: true }),
     ])
 
-    const fmt: (d: Date) => string = range === '1d'
-      ? (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : range === '30d'
-      ? (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-      : (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
     if (loadId !== chartLoadId.current) return
 
     const data = tempRes.data
@@ -312,7 +306,7 @@ export function IotcenterSourceDetailPage() {
           : (p.humidity as number) ?? (p.lastHumidity as number)
         if (typeof t === 'number') {
           const ts = new Date(e.created_at)
-          const log: TempLog = { timestamp: fmt(ts), rawTs: ts.getTime(), temperature: t }
+          const log: TempLog = { timestamp: ts.toLocaleString(), rawTs: ts.getTime(), temperature: t }
           if (typeof h === 'number' && h > 0) { log.humidity = h; hasHumid = true }
           logs.push(log)
         }
@@ -645,12 +639,19 @@ export function IotcenterSourceDetailPage() {
                     />
                   ))}
                   <XAxis
-                    dataKey="timestamp"
+                    dataKey="rawTs"
+                    type="number"
+                    domain={['dataMin', 'dataMax']}
                     fontSize={11}
                     tick={{ fontSize: 10, fill: '#94a3b8' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                     tickLine={false}
-                    interval={chartRange === '1d' ? 'preserveStartEnd' : Math.max(1, Math.floor(tempLogs.length / 12))}
+                    tickFormatter={(ts: number) => {
+                      const d = new Date(ts)
+                      if (chartRange === '1d') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      if (chartRange === '30d') return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+                      return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    }}
                     height={36}
                   />
                   <YAxis
@@ -685,7 +686,7 @@ export function IotcenterSourceDetailPage() {
                       padding: '8px 12px',
                     }}
                     formatter={(value: number, name: string) => [value.toFixed(1) + (name === 'humidity' ? '%' : '°C'), name === 'humidity' ? 'Humidity' : 'Temperature']}
-                    labelFormatter={(label: string) => label}
+                    labelFormatter={(label: number) => new Date(label).toLocaleString()}
                   />
                   <ReferenceLine
                     y={chartThreshold}
