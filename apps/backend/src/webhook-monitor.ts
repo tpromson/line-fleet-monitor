@@ -50,23 +50,23 @@ export async function checkAllWebhooks() {
     }).filter((u): u is { id: string; status: 'online' | 'offline' | 'unknown' } => u !== null)
 
     if (updates.length > 0) {
-      const { error: updateErr } = await supabase
-        .from('channels')
-        .upsert(updates.map((u) => ({ id: u.id, webhook_status: u.status, webhook_checked_at: now })))
-
-      if (updateErr) {
-        console.error('[webhook] Bulk update failed:', updateErr.message)
-        for (const u of updates) {
-          await supabase
+      // Per-row update, not upsert: upsert() emits INSERT ... ON CONFLICT, and Postgres
+      // validates NOT NULL columns (provider_id, channel_name, access_token) on the INSERT
+      // branch even though every id here already exists and only an UPDATE is intended.
+      await Promise.all(
+        updates.map(async (u) => {
+          const { error: updateErr } = await supabase
             .from('channels')
             .update({ webhook_status: u.status, webhook_checked_at: now })
             .eq('id', u.id)
-        }
-      } else {
-        for (const u of updates) {
-          console.log(`[webhook] ${u.id.slice(0, 8)}: ${u.status}`)
-        }
-      }
+
+          if (updateErr) {
+            console.error(`[webhook] Update failed for ${u.id.slice(0, 8)}:`, updateErr.message)
+          } else {
+            console.log(`[webhook] ${u.id.slice(0, 8)}: ${u.status}`)
+          }
+        })
+      )
     }
 
     if (i + BATCH_SIZE < channels.length) await sleep(BATCH_DELAY_MS)
