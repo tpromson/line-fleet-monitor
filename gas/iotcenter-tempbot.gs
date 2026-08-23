@@ -60,7 +60,8 @@ var IoTcenter = (function() {
     var data = {
       event_type: eventType,
       level: level || 'info',
-      message: message || ''
+      message: message || '',
+      device_name: _deviceName
     };
     if (payload) data.payload = payload;
     return _callApi('/api/iotcenter/events', data);

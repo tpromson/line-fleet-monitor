@@ -6,6 +6,8 @@ const mockSupabase = vi.hoisted(() => ({
   from: vi.fn(),
 }))
 
+const mockSendMophNotify = vi.hoisted(() => vi.fn().mockResolvedValue({ status: 'sent' }))
+
 const { mockResendFn } = vi.hoisted(() => {
   vi.stubEnv('RESEND_API_KEY', 're_test_key')
   return {
@@ -19,6 +21,10 @@ vi.mock('../lib/supabase.js', () => ({
 
 vi.mock('../lib/email.js', () => ({
   sendAlertEmail: vi.fn(),
+}))
+
+vi.mock('../lib/moph-notify.js', () => ({
+  sendMophNotify: mockSendMophNotify,
 }))
 
 vi.mock('resend', () => ({
@@ -160,6 +166,40 @@ describe('iotcenter routes', () => {
         level: 'warning',
         message: 'Temperature exceeds threshold',
       }))
+    })
+
+    it('sends MOPH Notify when temperature changes from normal to high', async () => {
+      vi.stubEnv('MOPH_NOTIFY_ENABLED', 'true')
+      const insertSpy = vi.fn().mockResolvedValue({ error: null })
+      const previousLimit = vi.fn().mockResolvedValue({ data: [{ event_type: 'TEMP_NORMAL' }] })
+      const previousOrder = vi.fn().mockReturnValue({ limit: previousLimit })
+      const previousIn = vi.fn().mockReturnValue({ order: previousOrder })
+      const previousEq = vi.fn().mockReturnValue({ in: previousIn })
+      const previousSelect = vi.fn().mockReturnValue({ eq: previousEq })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'events') return { select: previousSelect, insert: insertSpy } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          event_type: 'HIGH_TEMP',
+          level: 'warning',
+          message: 'อุณหภูมิเกินเกณฑ์',
+          payload: { temperature: 28.5, threshold: 25 },
+        }),
+      })
+
+      expect(res.status).toBe(201)
+      expect(mockSendMophNotify).toHaveBeenCalledWith(expect.stringContaining('28.5'))
+      expect(mockSendMophNotify).toHaveBeenCalledWith(expect.stringContaining('25.0'))
     })
 
     it('updates device status on heartbeat event', async () => {

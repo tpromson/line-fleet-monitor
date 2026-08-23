@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit'
 import { supabase } from '../lib/supabase.js'
 import { requireApiKey } from '../lib/api-key-auth.js'
 import { requireSuperAdmin } from '../lib/auth.js'
+import { sendMophNotify } from '../lib/moph-notify.js'
 
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -89,6 +90,76 @@ function hasTemperature(payload: unknown): boolean {
 
 function isReconnectOutlierTemp(t: number): boolean {
   return Math.abs(t - OUTLIER_RECONNECT_TEMP) <= OUTLIER_RECONNECT_TOLERANCE
+}
+
+function isTemperatureEvent(eventType: string): boolean {
+  return ['HIGH_TEMP', 'LOW_TEMP', 'TEMP_NORMAL', 'TEMP_RECOVERY'].includes(eventType)
+}
+
+async function getPreviousTemperatureEventType(sourceId: string, deviceId: string | null): Promise<string | null> {
+  const baseQuery = supabase
+    .from('events')
+    .select('event_type')
+    .eq('source_id', sourceId)
+
+  const query = deviceId ? baseQuery.eq('device_id', deviceId) : baseQuery
+  const { data } = await query
+    .in('event_type', ['HIGH_TEMP', 'LOW_TEMP', 'TEMP_NORMAL', 'TEMP_RECOVERY'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  return data?.[0]?.event_type ?? null
+}
+
+async function notifyTemperatureTransition(params: {
+  eventType: string
+  previousEventType: string | null
+  deviceName?: string
+  message?: string
+  payload: unknown
+}): Promise<void> {
+  if (!isTemperatureEvent(params.eventType)) return
+
+  const temperature = readNumber(params.payload, 'temperature', 'lastTemperature')
+  if (temperature === null) return
+
+  const isAbnormal = params.eventType === 'HIGH_TEMP' || params.eventType === 'LOW_TEMP'
+  const wasAbnormal = params.previousEventType === 'HIGH_TEMP' || params.previousEventType === 'LOW_TEMP'
+  const shouldNotify = isAbnormal
+    ? params.previousEventType !== params.eventType
+    : wasAbnormal
+
+  if (!shouldNotify) return
+
+  const threshold = readNumber(params.payload, 'threshold')
+  const isHigh = params.eventType === 'HIGH_TEMP'
+  const isLow = params.eventType === 'LOW_TEMP'
+  const text = isHigh
+    ? [
+        '⚠️ แจ้งเตือนอุณหภูมิสูง',
+        `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
+        `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
+        threshold === null ? null : `เกณฑ์: ${threshold.toFixed(1)} °C`,
+        params.message || null,
+      ].filter(Boolean).join('\n')
+    : isLow
+      ? [
+          '❄️ แจ้งเตือนอุณหภูมิต่ำ',
+          `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
+          `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
+          threshold === null ? null : `เกณฑ์ขั้นต่ำ: ${threshold.toFixed(1)} °C`,
+          params.message || null,
+        ].filter(Boolean).join('\n')
+    : [
+        '✅ อุณหภูมิกลับสู่ภาวะปกติ',
+        `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
+        `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
+      ].join('\n')
+
+  const result = await sendMophNotify(text)
+  if (result.status === 'failed') {
+    console.error('[iotcenter] Temperature MOPH Notify failed:', result.reason)
+  }
 }
 
 async function logOutlier(params: {
@@ -297,14 +368,25 @@ export function registerIotcenterRoutes(app: Express) {
       return
     }
 
-    if (device_id && hasTemperature(payload)) {
+    let resolvedDeviceId = device_id || null
+    if (!resolvedDeviceId && device_name) {
+      const { data: dev } = await supabase
+        .from('devices')
+        .select('id')
+        .eq('source_id', source.sourceId)
+        .ilike('device_name', device_name)
+        .maybeSingle()
+      if (dev) resolvedDeviceId = dev.id
+    }
+
+    if (resolvedDeviceId && hasTemperature(payload)) {
       const temp = readNumber(payload, 'temperature', 'lastTemperature')
       if (temp !== null && isReconnectOutlierTemp(temp)) {
-        const recentlyOffline = await wasDeviceRecentlyOffline(device_id, source.sourceId)
+        const recentlyOffline = await wasDeviceRecentlyOffline(resolvedDeviceId, source.sourceId)
         if (recentlyOffline) {
           await logOutlier({
             sourceId: source.sourceId,
-            deviceId: device_id,
+            deviceId: resolvedDeviceId,
             eventType: event_type,
             reason: 'reconnect_25c',
             payload,
@@ -315,9 +397,13 @@ export function registerIotcenterRoutes(app: Express) {
       }
     }
 
+    const previousTemperatureEventType = process.env.MOPH_NOTIFY_ENABLED === 'true' && isTemperatureEvent(event_type)
+      ? await getPreviousTemperatureEventType(source.sourceId, resolvedDeviceId)
+      : null
+
     const { error } = await supabase.from('events').insert({
       source_id: source.sourceId,
-      device_id: device_id || null,
+      device_id: resolvedDeviceId,
       event_type,
       level: level || null,
       message: message || null,
@@ -352,26 +438,26 @@ export function registerIotcenterRoutes(app: Express) {
       }
     }
 
-    if (event_type === 'TEMP_NORMAL' || event_type === 'HIGH_TEMP' || event_type === 'SENSOR_RECOVERY') {
-      let resolvedId = device_id
-      if (!resolvedId && device_name) {
-        const { data: dev } = await supabase
-          .from('devices')
-          .select('id')
-          .eq('source_id', source.sourceId)
-          .ilike('device_name', device_name)
-          .maybeSingle()
-        if (dev) resolvedId = dev.id
-      }
-      if (resolvedId) {
-        const { data: devData } = await supabase.from('devices').select('metadata').eq('id', resolvedId).maybeSingle()
+    if (['TEMP_NORMAL', 'HIGH_TEMP', 'LOW_TEMP', 'TEMP_RECOVERY', 'SENSOR_RECOVERY'].includes(event_type)) {
+      if (resolvedDeviceId) {
+        const { data: devData } = await supabase.from('devices').select('metadata').eq('id', resolvedDeviceId).maybeSingle()
         const devMeta = (devData?.metadata as Record<string, unknown>) || {}
         await supabase
           .from('devices')
           .update({ status: 'online', last_seen: nowTs, updated_at: nowTs, metadata: { ...devMeta, sensor_status: 'online' } })
-          .eq('id', resolvedId)
+          .eq('id', resolvedDeviceId)
           .eq('source_id', source.sourceId)
       }
+    }
+
+    if (process.env.MOPH_NOTIFY_ENABLED === 'true') {
+      await notifyTemperatureTransition({
+        eventType: event_type,
+        previousEventType: previousTemperatureEventType,
+        deviceName: device_name,
+        message,
+        payload,
+      })
     }
 
     if ((event_type === 'SENSOR OFFLINE' || event_type === 'SENSOR_OFFLINE') && device_id) {
