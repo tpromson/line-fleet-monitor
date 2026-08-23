@@ -21,6 +21,28 @@ services:
         sync: false
       - key: ALERT_EMAIL_TO
         sync: false
+      - key: MOPH_ALERT_ENABLED
+        value: "false"
+      - key: MOPH_ALERT_TOKEN_URL
+        value: https://cvp1.moph.go.th/token
+      - key: MOPH_ALERT_BASE_URL
+        value: https://morpromt2c.moph.go.th
+      - key: MOPH_ALERT_USER
+        sync: false
+      - key: MOPH_ALERT_PASSWORD_HASH
+        sync: false
+      - key: MOPH_ALERT_HOSPITAL_CODE
+        sync: false
+      - key: MOPH_ALERT_CIDS
+        sync: false
+      - key: MOPH_NOTIFY_ENABLED
+        value: "true"
+      - key: MOPH_NOTIFY_URL
+        value: https://morpromt2f.moph.go.th/api/notify/send
+      - key: MOPH_NOTIFY_CLIENT_KEY
+        sync: false
+      - key: MOPH_NOTIFY_SECRET_KEY
+        sync: false
       - key: SENTRY_DSN
         sync: false
       - key: PORT

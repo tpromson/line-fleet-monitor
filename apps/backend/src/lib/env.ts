@@ -14,5 +14,32 @@ export function validateEnv(): void {
     warnings.push('ALERT_EMAIL_TO is set but RESEND_API_KEY is missing — alerts will fail to send')
   }
 
+  const mophAlertFields = [
+    'MOPH_ALERT_USER',
+    'MOPH_ALERT_PASSWORD_HASH',
+    'MOPH_ALERT_HOSPITAL_CODE',
+    'MOPH_ALERT_CIDS',
+  ]
+  const hasMophAlertSettings = mophAlertFields.some((name) => Boolean(process.env[name]))
+  if (hasMophAlertSettings && process.env.MOPH_ALERT_ENABLED !== 'true') {
+    warnings.push('MOPH Alert settings are present but MOPH_ALERT_ENABLED is not true — sending is disabled')
+  }
+  if (process.env.MOPH_ALERT_ENABLED === 'true') {
+    for (const name of mophAlertFields) {
+      if (!process.env[name]) warnings.push(`${name} is not set — MOPH Alert sending will be skipped`)
+    }
+  }
+
+  const mophNotifyFields = ['MOPH_NOTIFY_CLIENT_KEY', 'MOPH_NOTIFY_SECRET_KEY']
+  const hasMophNotifySettings = mophNotifyFields.some((name) => Boolean(process.env[name]))
+  if (hasMophNotifySettings && process.env.MOPH_NOTIFY_ENABLED !== 'true') {
+    warnings.push('MOPH Notify settings are present but MOPH_NOTIFY_ENABLED is not true — sending is disabled')
+  }
+  if (process.env.MOPH_NOTIFY_ENABLED === 'true') {
+    for (const name of mophNotifyFields) {
+      if (!process.env[name]) warnings.push(`${name} is not set — MOPH Notify sending will be skipped`)
+    }
+  }
+
   for (const w of warnings) console.warn(`[env] WARNING: ${w}`)
 }

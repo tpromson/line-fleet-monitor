@@ -1,5 +1,7 @@
 import { supabase } from './lib/supabase.js'
 import { sendAlertEmail } from './lib/email.js'
+import { sendMophAlert } from './lib/moph-alert.js'
+import { sendMophNotify } from './lib/moph-notify.js'
 
 const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO?.split(',').map((e) => e.trim()).filter(Boolean) ?? []
 
@@ -85,6 +87,8 @@ export async function checkAlerts() {
       ? emailItems[0].message
       : emailItems.map((i) => i.message).join('\n\n---\n\n')
     await sendAlertEmail(ALERT_EMAIL_TO, subject, body)
+    await sendMophAlert(body)
+    await sendMophNotify(body)
   }
 
   console.log('[alert] Check complete')

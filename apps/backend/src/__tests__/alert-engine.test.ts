@@ -5,6 +5,7 @@ const mockSupabase = vi.hoisted(() => ({
 }))
 
 const mockSendEmail = vi.hoisted(() => vi.fn())
+const mockSendMophNotify = vi.hoisted(() => vi.fn().mockResolvedValue({ status: 'skipped' }))
 
 vi.mock('../lib/supabase.js', () => ({
   supabase: mockSupabase,
@@ -12,6 +13,10 @@ vi.mock('../lib/supabase.js', () => ({
 
 vi.mock('../lib/email.js', () => ({
   sendAlertEmail: mockSendEmail,
+}))
+
+vi.mock('../lib/moph-notify.js', () => ({
+  sendMophNotify: mockSendMophNotify,
 }))
 
 import { checkAlerts } from '../alert-engine.js'
@@ -46,6 +51,7 @@ describe('alert-engine', () => {
     mockSupabase.from.mockImplementation((table: string) => createMockTable(table, [{ channel_id: 'ch1', quota_used: 850 }], null, insertSpy))
     await checkAlerts()
     expect(mockSendEmail).toHaveBeenCalled()
+    expect(mockSendMophNotify).toHaveBeenCalled()
     expect(insertSpy).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ level: 'warning' })]))
   })
 
