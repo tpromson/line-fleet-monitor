@@ -39,6 +39,9 @@ export function validateEnv(): void {
     for (const name of mophNotifyFields) {
       if (!process.env[name]) warnings.push(`${name} is not set — MOPH Notify sending will be skipped`)
     }
+    if (!process.env.MOPH_SUMMARY_API_KEY) {
+      warnings.push('MOPH_SUMMARY_API_KEY is not set — sensor summary endpoint is disabled')
+    }
   }
 
   for (const w of warnings) console.warn(`[env] WARNING: ${w}`)

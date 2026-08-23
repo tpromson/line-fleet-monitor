@@ -1,5 +1,6 @@
 import express from 'express'
 import type { Express } from 'express'
+import { timingSafeEqual } from 'node:crypto'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import * as Sentry from '@sentry/node'
@@ -10,6 +11,7 @@ import { testChannelWebhook } from './lib/line-api.js'
 import { getAuthorizedChannelAccessToken, requireAuth, requireSuperAdmin } from './lib/auth.js'
 import { registerIotcenterRoutes } from './routes/iotcenter.js'
 import { supabase } from './lib/supabase.js'
+import { sendMophNotify } from './lib/moph-notify.js'
 
 function requireEnv(name: string): string {
   const value = process.env[name]
@@ -17,6 +19,14 @@ function requireEnv(name: string): string {
     throw new Error(`Required environment variable ${name} is not set`)
   }
   return value
+}
+
+function matchesSummaryKey(provided: string | undefined, expected: string | undefined): boolean {
+  if (!provided || !expected) return false
+  const providedBuffer = Buffer.from(provided)
+  const expectedBuffer = Buffer.from(expected)
+  if (providedBuffer.length !== expectedBuffer.length) return false
+  return timingSafeEqual(providedBuffer, expectedBuffer)
 }
 
 export function buildApp(): Express {
@@ -47,7 +57,7 @@ export function buildApp(): Express {
       res.header('Access-Control-Allow-Origin', origin)
       res.header('Vary', 'Origin')
     }
-    res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+    res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Summary-Key')
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     if (req.method === 'OPTIONS') {
       res.sendStatus(204)
@@ -58,6 +68,40 @@ export function buildApp(): Express {
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  })
+
+  app.post('/api/notify/sensor-summary', apiLimiter, async (req, res) => {
+    const configuredKey = process.env.MOPH_SUMMARY_API_KEY
+    if (!configuredKey) {
+      res.status(503).json({ error: 'Sensor summary notification is not configured' })
+      return
+    }
+
+    if (!matchesSummaryKey(req.header('X-Summary-Key'), configuredKey)) {
+      res.status(401).json({ error: 'Invalid summary key' })
+      return
+    }
+
+    const message = req.body?.message
+    if (typeof message !== 'string' || message.trim().length === 0) {
+      res.status(400).json({ error: 'message is required' })
+      return
+    }
+    if (message.length > 10_000) {
+      res.status(413).json({ error: 'message is too long' })
+      return
+    }
+
+    const result = await sendMophNotify(message)
+    if (result.status === 'sent') {
+      res.json({ status: 'sent' })
+      return
+    }
+    if (result.status === 'skipped') {
+      res.status(503).json({ status: 'skipped', error: 'MOPH Notify is not configured' })
+      return
+    }
+    res.status(502).json({ status: 'failed', error: 'MOPH Notify request failed' })
   })
 
   app.post('/api/sync', apiLimiter, async (req, res) => {

@@ -19,6 +19,12 @@ vi.mock('../lib/email.js', () => ({
   sendAlertEmail: vi.fn(),
 }))
 
+const mockSendMophNotify = vi.hoisted(() => vi.fn())
+
+vi.mock('../lib/moph-notify.js', () => ({
+  sendMophNotify: mockSendMophNotify,
+}))
+
 vi.mock('../collector.js', () => ({
   collectAllQuotas: vi.fn().mockResolvedValue(undefined),
 }))
@@ -57,6 +63,7 @@ describe('app middleware', () => {
   beforeEach(async () => {
     vi.stubEnv('CORS_ORIGIN', 'https://allowed.example.com')
     vi.stubEnv('RATE_LIMIT_MAX', '5')
+    vi.clearAllMocks()
     await start()
   })
 
@@ -75,6 +82,36 @@ describe('app middleware', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.status).toBe('ok')
+  })
+
+  it('protects the sensor summary endpoint with its own key', async () => {
+    vi.stubEnv('MOPH_SUMMARY_API_KEY', 'summary-key')
+    const res = await fetch(`${baseUrl}/api/notify/sensor-summary`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'test summary' }),
+    })
+
+    expect(res.status).toBe(401)
+    expect(mockSendMophNotify).not.toHaveBeenCalled()
+  })
+
+  it('forwards an authenticated sensor summary to MOPH Notify', async () => {
+    vi.stubEnv('MOPH_SUMMARY_API_KEY', 'summary-key')
+    mockSendMophNotify.mockResolvedValueOnce({ status: 'sent' })
+
+    const res = await fetch(`${baseUrl}/api/notify/sensor-summary`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-summary-key': 'summary-key',
+      },
+      body: JSON.stringify({ message: 'test summary' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ status: 'sent' })
+    expect(mockSendMophNotify).toHaveBeenCalledWith('test summary')
   })
 
   it('reflects CORS_ORIGIN and handles OPTIONS preflight', async () => {
