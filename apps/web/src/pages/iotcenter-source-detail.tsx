@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Monitor, Clock, CheckCircle, XCircle, AlertTriangle, Copy, Zap, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Area, CartesianGrid } from 'recharts'
 import { humanLabel, formatPayloadValue, formatTimestamp } from '@/lib/labels'
 import { fetchBackend } from '@/lib/backend-api'
+import { downloadCsv } from '@/lib/csv'
 import { toast } from 'sonner'
 
 interface DeviceSummary {
@@ -415,6 +416,41 @@ export function IotcenterSourceDetailPage() {
     }
   }
 
+  const exportTempCsv = () => {
+    if (!source) return
+    const headers = hasHumidity
+      ? ['timestamp', 'temperature_c', 'humidity_pct']
+      : ['timestamp', 'temperature_c']
+    const rows = tempLogs.map((log) =>
+      hasHumidity
+        ? [new Date(log.rawTs).toISOString(), log.temperature, log.humidity ?? '']
+        : [new Date(log.rawTs).toISOString(), log.temperature]
+    )
+    downloadCsv(`${source.name}-temperature-${chartRange}`, headers, rows)
+  }
+
+  const exportEventsCsv = () => {
+    if (!source) return
+    const filtered = events.filter((ev) => {
+      if (eventFilter === 'all') return true
+      if (eventFilter === 'alert') return ev.level === 'warning' || ev.level === 'critical'
+      if (eventFilter === 'temp') return ev.event_type === 'TEMP_NORMAL' || ev.event_type === 'HIGH_TEMP'
+      if (eventFilter === 'boot') return ev.event_type === 'DEVICE_BOOT' || ev.event_type === 'BOOT_WDT' || ev.event_type === 'BOOT'
+      if (eventFilter === 'report') return ev.event_type.includes('REPORT')
+      if (eventFilter === 'heartbeat') return ev.event_type === 'heartbeat'
+      return true
+    })
+    const headers = ['timestamp', 'event_type', 'level', 'message', 'payload']
+    const rows = filtered.map((ev) => [
+      ev.created_at,
+      ev.event_type,
+      ev.level ?? '',
+      ev.message ?? '',
+      ev.payload && Object.keys(ev.payload).length > 0 ? ev.payload : '',
+    ])
+    downloadCsv(`${source.name}-events-${eventRange}`, headers, rows)
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -588,6 +624,15 @@ export function IotcenterSourceDetailPage() {
                     {DATE_LABELS[range]}
                   </Button>
                 ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  onClick={exportTempCsv}
+                  disabled={chartLoading || tempLogs.length === 0}
+                >
+                  <Download className="w-3 h-3 mr-1" /> CSV
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -832,6 +877,15 @@ export function IotcenterSourceDetailPage() {
                   {f.label}
                 </Button>
               ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2"
+                onClick={exportEventsCsv}
+                disabled={eventLoading || events.length === 0}
+              >
+                <Download className="w-3 h-3 mr-1" /> CSV
+              </Button>
             </div>
           </div>
         </CardHeader>

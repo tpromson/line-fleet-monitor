@@ -5,9 +5,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer, Snowflake, Zap, Droplets, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, ChevronDown, Thermometer, Snowflake, Zap, Droplets, TrendingUp, TrendingDown, Minus, Download } from 'lucide-react'
 import { formatTimestamp, todayInTz, dateStrInTz } from '@/lib/labels'
 import { useVisibilityPoll } from '@/hooks/use-visibility-poll'
+import { downloadCsv } from '@/lib/csv'
 
 interface StatCardProps {
   icon: React.ReactNode
@@ -280,11 +281,44 @@ export function IotcenterDashboardPage() {
     return 'text-emerald-600'
   }
 
+  const exportSourcesCsv = () => {
+    const tempBySource = new Map(tempWidgets.map((tw) => [tw.sourceId, tw]))
+    const headers = [
+      'source_name', 'organization', 'source_type', 'active',
+      'device_name', 'device_status', 'last_seen',
+      'current_temp_c', 'current_humidity_pct', 'threshold_c',
+    ]
+    const rows = filteredSources.flatMap((s) => {
+      const tw = tempBySource.get(s.id)
+      const devices = s.devices.length > 0 ? s.devices : [{ id: '', device_name: '', status: '', last_seen: null }]
+      return devices.map((d) => [
+        s.name,
+        s.organization.name,
+        s.source_type.display_name,
+        s.active,
+        d.device_name,
+        d.status,
+        d.last_seen ?? '',
+        tw?.currentTemp ?? '',
+        tw?.currentHumid ?? '',
+        tw?.threshold ?? '',
+      ])
+    })
+    downloadCsv(`iotcenter-sources-${selectedOrgId}`, headers, rows)
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">IoTcenter</h2>
-        <p className="text-muted-foreground text-xs">Multi-source monitoring dashboard</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">IoTcenter</h2>
+          <p className="text-muted-foreground text-xs">Multi-source monitoring dashboard</p>
+        </div>
+        {!loading && filteredSources.length > 0 && (
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportSourcesCsv}>
+            <Download className="w-3.5 h-3.5 mr-1.5" /> Export CSV
+          </Button>
+        )}
       </div>
 
       {!loading && orgOptions.length > 0 && (
