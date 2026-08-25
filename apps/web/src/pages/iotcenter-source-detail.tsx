@@ -10,6 +10,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { humanLabel, formatPayloadValue, formatTimestamp } from '@/lib/labels'
 import { fetchBackend } from '@/lib/backend-api'
 import { downloadCsv } from '@/lib/csv'
+import { isPlausibleTemp } from '@/lib/temperature'
 import { toast } from 'sonner'
 
 interface DeviceSummary {
@@ -316,7 +317,7 @@ export function IotcenterSourceDetailPage() {
         const h = isHeartbeat
           ? (p.humidity as number | undefined)
           : (p.humidity as number) ?? (p.lastHumidity as number)
-        if (typeof t === 'number') {
+        if (isPlausibleTemp(t)) {
           const ts = new Date(e.created_at)
           const log: TempLog = { timestamp: ts.toLocaleString(), rawTs: ts.getTime(), temperature: t }
           if (typeof h === 'number' && h > 0) { log.humidity = h; hasHumid = true }
@@ -390,11 +391,15 @@ export function IotcenterSourceDetailPage() {
     }
   }
 
+  const eventTemp = (e: EventRow): number | null => {
+    const t = (e.payload?.temperature as number) ?? (e.payload?.lastTemperature as number)
+    return isPlausibleTemp(t) ? t : null
+  }
   const latestTempEvent = events.find(
-    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
-      (e.event_type === 'heartbeat' && (e.payload?.temperature || e.payload?.lastTemperature))
+    (e) => (e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' || e.event_type === 'heartbeat') &&
+      eventTemp(e) !== null
   )
-  const currentTemp = latestTempEvent ? (latestTempEvent.payload?.temperature as number) ?? (latestTempEvent.payload?.lastTemperature as number) ?? null : null
+  const currentTemp = latestTempEvent ? eventTemp(latestTempEvent) : null
   const srcThreshold = source ? ((source.metadata?.threshold as number) || 10) : 10
 
   const deviceStatusBadge = (status: string) => {
@@ -477,8 +482,8 @@ export function IotcenterSourceDetailPage() {
   }
 
   const showTempChart = tempLogs.length > 0 || events.some(
-    (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
-      (e.event_type === 'heartbeat' && (e.payload?.temperature || e.payload?.lastTemperature))
+    (e) => (e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' || e.event_type === 'heartbeat') &&
+      eventTemp(e) !== null
   )
 
   return (

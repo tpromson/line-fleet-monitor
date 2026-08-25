@@ -9,6 +9,7 @@ import { Plug, CheckCircle, XCircle, AlertTriangle, Activity, ChevronRight, Chev
 import { formatTimestamp, todayInTz, dateStrInTz } from '@/lib/labels'
 import { useVisibilityPoll } from '@/hooks/use-visibility-poll'
 import { downloadCsv } from '@/lib/csv'
+import { isPlausibleTemp } from '@/lib/temperature'
 
 interface StatCardProps {
   icon: React.ReactNode
@@ -174,9 +175,14 @@ export function IotcenterDashboardPage() {
 
         src.last_event = sorted[0] ?? null
 
+        const eventTemp = (e: EventData) => {
+          const t = (e.payload?.temperature as number) ?? (e.payload?.lastTemperature as number)
+          return isPlausibleTemp(t) ? t : null
+        }
+
         const tempEvent = events.find(
-          (e) => e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' ||
-            (e.event_type === 'heartbeat' && (e.payload?.temperature || e.payload?.lastTemperature))
+          (e) => (e.event_type === 'TEMP_NORMAL' || e.event_type === 'HIGH_TEMP' || e.event_type === 'heartbeat') &&
+            eventTemp(e) !== null
         )
         if (!tempEvent) continue
 
@@ -186,8 +192,8 @@ export function IotcenterDashboardPage() {
 
         const todayTemps = events
           .filter((e) => dateStrInTz(e.created_at) === todayStr)
-          .map((e) => (e.payload?.temperature as number) ?? (e.payload?.lastTemperature as number))
-          .filter((t) => typeof t === 'number')
+          .map(eventTemp)
+          .filter((t): t is number => t !== null)
         const realtimeMax = todayTemps.length > 0 ? Math.max(...todayTemps) : null
         const realtimeMin = todayTemps.length > 0 ? Math.min(...todayTemps) : null
         const realtimeAvg = todayTemps.length > 0 ? todayTemps.reduce((a, b) => a + b, 0) / todayTemps.length : null
@@ -195,7 +201,7 @@ export function IotcenterDashboardPage() {
     widgets.push({
       sourceId: src.id,
       sourceName: src.name,
-      currentTemp: (tempEvent.payload?.temperature as number) ?? (tempEvent.payload?.lastTemperature as number) ?? null,
+      currentTemp: eventTemp(tempEvent),
       currentHumid: (tempEvent.payload?.humidity as number) ?? (tempEvent.payload?.lastHumidity as number) ?? null,
       todayMax: dailyReport ? (dailyReport.payload?.maxTemp as number) ?? realtimeMax : realtimeMax,
       todayMin: dailyReport ? (dailyReport.payload?.minTemp as number) ?? realtimeMin : realtimeMin,

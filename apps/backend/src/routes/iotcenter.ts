@@ -18,6 +18,14 @@ const OUTLIER_RECONNECT_GAP_MS = parseInt(process.env.OUTLIER_RECONNECT_GAP_MS |
 const OUTLIER_RECONNECT_TEMP = Number(process.env.OUTLIER_RECONNECT_TEMP || 25)
 const OUTLIER_RECONNECT_TOLERANCE = 0.1
 
+// Absolute sanity bounds — no monitored fridge/freezer/storage room legitimately
+// reads below -40°C or above 60°C. Separate from the narrow ~25°C reconnect-glitch
+// filter above; catches generic sensor garbage (e.g. a DHT22 read error reporting
+// 85°C). Mirrored client-side in apps/web/src/lib/temperature.ts since the main
+// dashboard queries Supabase directly and never goes through these routes.
+const MIN_PLAUSIBLE_TEMP = Number(process.env.MIN_PLAUSIBLE_TEMP || -40)
+const MAX_PLAUSIBLE_TEMP = Number(process.env.MAX_PLAUSIBLE_TEMP || 60)
+
 type ConfigRow = {
   source_id: string
   display_name: string | null
@@ -90,6 +98,10 @@ function hasTemperature(payload: unknown): boolean {
 
 function isReconnectOutlierTemp(t: number): boolean {
   return Math.abs(t - OUTLIER_RECONNECT_TEMP) <= OUTLIER_RECONNECT_TOLERANCE
+}
+
+function isImplausibleTemp(t: number): boolean {
+  return t < MIN_PLAUSIBLE_TEMP || t > MAX_PLAUSIBLE_TEMP
 }
 
 function isTemperatureEvent(eventType: string): boolean {
@@ -209,7 +221,9 @@ async function wasDeviceRecentlyOffline(deviceId: string, sourceId: string): Pro
 function isOutlierEvent(events: EventRow[], target: EventRow): boolean {
   if (!hasTemperature(target.payload)) return false
   const temp = readNumber(target.payload, 'temperature', 'lastTemperature')
-  if (temp === null || !isReconnectOutlierTemp(temp)) return false
+  if (temp === null) return false
+  if (isImplausibleTemp(temp)) return true
+  if (!isReconnectOutlierTemp(temp)) return false
 
   const targetTime = new Date(target.created_at).getTime()
   let prevTime: number | null = null
@@ -237,6 +251,7 @@ function findLatestTempEvent(events: EventRow[]): EventRow | undefined {
     if (!isTempEvent) continue
 
     const temp = readNumber(e.payload, 'temperature', 'lastTemperature')
+    if (temp !== null && isImplausibleTemp(temp)) continue
     if (temp !== null && isReconnectOutlierTemp(temp)) {
       const next = events[i + 1]
       const prevTime = next ? new Date(next.created_at).getTime() : null
@@ -379,9 +394,20 @@ export function registerIotcenterRoutes(app: Express) {
       if (dev) resolvedDeviceId = dev.id
     }
 
-    if (resolvedDeviceId && hasTemperature(payload)) {
+    if (hasTemperature(payload)) {
       const temp = readNumber(payload, 'temperature', 'lastTemperature')
-      if (temp !== null && isReconnectOutlierTemp(temp)) {
+      if (temp !== null && isImplausibleTemp(temp)) {
+        await logOutlier({
+          sourceId: source.sourceId,
+          deviceId: resolvedDeviceId,
+          eventType: event_type,
+          reason: 'implausible_value',
+          payload,
+        })
+        res.status(200).json({ status: 'filtered_outlier', reason: 'implausible_value' })
+        return
+      }
+      if (resolvedDeviceId && temp !== null && isReconnectOutlierTemp(temp)) {
         const recentlyOffline = await wasDeviceRecentlyOffline(resolvedDeviceId, source.sourceId)
         if (recentlyOffline) {
           await logOutlier({
@@ -536,9 +562,20 @@ export function registerIotcenterRoutes(app: Express) {
         Date.now() - new Date(existing.last_seen).getTime() > OUTLIER_RECONNECT_GAP_MS
 
       let filtered = false
-      if (isReconnect && hasTemperature(metadata)) {
+      let filterReason: string | null = null
+      if (hasTemperature(metadata)) {
         const temp = readNumber(metadata, 'temperature', 'lastTemperature')
-        if (temp !== null && isReconnectOutlierTemp(temp)) {
+        if (temp !== null && isImplausibleTemp(temp)) {
+          await logOutlier({
+            sourceId: source.sourceId,
+            deviceId: existing.id,
+            eventType: 'heartbeat',
+            reason: 'implausible_value',
+            payload: metadata,
+          })
+          filtered = true
+          filterReason = 'implausible_value'
+        } else if (isReconnect && temp !== null && isReconnectOutlierTemp(temp)) {
           await logOutlier({
             sourceId: source.sourceId,
             deviceId: existing.id,
@@ -547,13 +584,14 @@ export function registerIotcenterRoutes(app: Express) {
             payload: metadata,
           })
           filtered = true
+          filterReason = 'reconnect_25c'
         }
       }
 
       const existingMeta = (existing.metadata as Record<string, unknown>) || {}
       const sensorOffline = existingMeta.sensor_status === 'offline'
       const temp = readNumber(metadata, 'temperature', 'lastTemperature')
-      const hasValidTemp = temp !== null && !isReconnectOutlierTemp(temp)
+      const hasValidTemp = temp !== null && !isImplausibleTemp(temp) && !isReconnectOutlierTemp(temp)
       const newSensorStatus = hasValidTemp ? 'online' : (existingMeta.sensor_status ?? 'online')
       const mergedMeta = metadata
         ? { ...existingMeta, ...metadata, sensor_status: newSensorStatus }
@@ -570,7 +608,7 @@ export function registerIotcenterRoutes(app: Express) {
         .eq('id', existing.id)
 
       if (filtered) {
-        res.status(200).json({ status: 'filtered_outlier', reason: 'reconnect_25c' })
+        res.status(200).json({ status: 'filtered_outlier', reason: filterReason })
         return
       }
 
