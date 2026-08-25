@@ -109,23 +109,48 @@ var MAX_PLAUSIBLE_TEMP = 20;
 var MIN_PLAUSIBLE_TEMP = -10;
 
 // ==========================================
+// sendFreshHeartbeat — ส่ง heartbeat เฉพาะตอนข้อมูลใน Sheet ยังสดอยู่
+// ⚠️ ใช้แทน IoTcenter.sendHeartbeat() ตรงๆ ทุกจุดในไฟล์นี้ (heartbeat,
+//    checkSensorStatus, checkTemperatureAlert, sendDailySummary,
+//    generateReport เดิมทุกตัวเรียก IoTcenter.sendHeartbeat() แบบไม่มี
+//    เงื่อนไขตอนจบฟังก์ชัน — แม้แต่ตอนที่เพิ่งตรวจพบว่า sensor offline
+//    ไปหมาดๆ ก็ตาม) ถ้าข้อมูลใน Sheet เก่าเกิน 35 นาที จะไม่ส่งอะไรเลย
+//    ปล่อยให้ devices.last_seen ฝั่ง backend ค้างจริง เพื่อให้ cron
+//    offline-detection (ทุก 5 นาที, threshold 35 นาที) จับได้ถูกต้อง
+//    — ไม่งั้น last_seen จะสดตลอด ทำให้ dashboard ไม่มีวันขึ้น Offline
+//    แม้ sensor จะหยุดส่งข้อมูลจริงไปนานแค่ไหนก็ตาม
+// ==========================================
+function sendFreshHeartbeat() {
+  var sheet = getTargetSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var lastTimestamp = sheet.getRange(lastRow, 1).getValue();
+  var lastDate = parseDate(lastTimestamp);
+  var dataAge = lastDate && !isNaN(lastDate.getTime())
+    ? (new Date().getTime() - lastDate.getTime()) / (1000 * 60)
+    : Infinity;
+
+  if (dataAge > 35) {
+    Logger.log('[heartbeat] Skipped — sheet data is ' + Math.round(dataAge) + ' min old');
+    return;
+  }
+
+  var iotCfg = getIoTcenterConfig();
+  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
+  var lastTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue();
+
+  IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, {
+    lastTemperature: lastTemp,
+    lastRow: lastRow
+  });
+}
+
+// ==========================================
 // บอก IoTcenter ว่า Bot ยังทำงานอยู่
 // ==========================================
 function heartbeat() {
-  var iotCfg = getIoTcenterConfig();
-  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
-
-  var sheet = getTargetSheet();
-  var lastRow = sheet.getLastRow();
-  var lastTemp = lastRow >= 2 ? sheet.getRange(lastRow, TEMP_COLUMN).getValue() : null;
-  var lastHumid = lastRow >= 2 ? sheet.getRange(lastRow, HUMID_COLUMN).getValue() : null;
-
-  var payload = { lastTemperature: lastTemp, lastRow: lastRow };
-  if (lastHumid !== null && !isNaN(lastHumid) && lastHumid > 0) {
-    payload.lastHumidity = lastHumid;
-  }
-
-  IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, payload);
+  sendFreshHeartbeat();
 }
 
 // ==========================================
@@ -183,9 +208,9 @@ function checkSensorStatus() {
 
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
-  
+
   if (lastRow < 2) {
-    IoTcenter.sendHeartbeat();
+    sendFreshHeartbeat();
     return;
   }
 
@@ -244,7 +269,7 @@ function checkSensorStatus() {
     }
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ==========================================
@@ -256,9 +281,9 @@ function checkTemperatureAlert() {
 
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
-  
+
   if (lastRow < 2) {
-    IoTcenter.sendHeartbeat();
+    sendFreshHeartbeat();
     return;
   }
 
@@ -270,7 +295,7 @@ function checkTemperatureAlert() {
 
   if (dataAge > 35) {
     // ข้อมูลเก่าเกิน 35 นาที — ไม่ส่ง TEMP_NORMAL เพื่อไม่ให้ override สถานะ offline
-    IoTcenter.sendHeartbeat();
+    sendFreshHeartbeat();
     return;
   }
 
@@ -300,7 +325,7 @@ function checkTemperatureAlert() {
     }
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ==========================================
@@ -371,7 +396,7 @@ function sendDailySummary() {
     );
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ==========================================
@@ -457,7 +482,7 @@ function generateReport(startHour, endHour, periodName, daysOffset) {
     );
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ==========================================
