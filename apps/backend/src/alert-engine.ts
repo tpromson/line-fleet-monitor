@@ -10,10 +10,16 @@ export async function checkAlerts() {
 
   const { data: channels } = await supabase
     .from('channels')
-    .select('id, channel_name, quota_limit')
+    .select('id, channel_name, quota_limit, provider_id')
     .eq('active', true)
 
   if (!channels || channels.length === 0) return
+
+  const providerIds = [...new Set(channels.map((channel) => channel.provider_id).filter(Boolean))]
+  const { data: providers } = providerIds.length > 0
+    ? await supabase.from('providers').select('id, organization_id').in('id', providerIds)
+    : { data: [] as Array<{ id: string; organization_id: string }> }
+  const organizationByProvider = new Map((providers ?? []).map((provider) => [provider.id, provider.organization_id]))
 
   const channelIds = channels.map((c) => c.id)
 
@@ -50,7 +56,7 @@ export async function checkAlerts() {
   }
 
   const alertsToInsert: Array<Record<string, unknown>> = []
-  const emailItems: Array<{ name: string; level: AlertLevel; message: string }> = []
+  const emailItems: Array<{ name: string; level: AlertLevel; message: string; organizationId?: string }> = []
 
   for (const channel of channels) {
     const quotaUsed = latestByChannel.get(channel.id)
@@ -71,7 +77,12 @@ export async function checkAlerts() {
       message,
     })
 
-    emailItems.push({ name: channel.channel_name, level: newLevel, message })
+    emailItems.push({
+      name: channel.channel_name,
+      level: newLevel,
+      message,
+      organizationId: organizationByProvider.get(channel.provider_id),
+    })
     console.log(`[alert] ${channel.channel_name}: ${newLevel} (${usagePct.toFixed(1)}%)`)
   }
 
@@ -88,7 +99,17 @@ export async function checkAlerts() {
       : emailItems.map((i) => i.message).join('\n\n---\n\n')
     await sendAlertEmail(ALERT_EMAIL_TO, subject, body)
     await sendMophAlert(body)
-    await sendMophNotify(body)
+
+    const targetOrganizationId = process.env.MOPH_NOTIFY_ORGANIZATION_ID?.trim()
+    const mophItems = targetOrganizationId
+      ? emailItems.filter((item) => item.organizationId === targetOrganizationId)
+      : emailItems
+    if (mophItems.length > 0) {
+      const mophBody = mophItems.length === 1
+        ? mophItems[0].message
+        : mophItems.map((i) => i.message).join('\n\n---\n\n')
+      await sendMophNotify(mophBody, targetOrganizationId)
+    }
   }
 
   console.log('[alert] Check complete')

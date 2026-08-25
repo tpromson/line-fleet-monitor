@@ -108,6 +108,10 @@ function isTemperatureEvent(eventType: string): boolean {
   return ['HIGH_TEMP', 'LOW_TEMP', 'TEMP_NORMAL', 'TEMP_RECOVERY'].includes(eventType)
 }
 
+function isSensorOfflineEvent(eventType: string): boolean {
+  return eventType === 'SENSOR OFFLINE' || eventType === 'SENSOR_OFFLINE'
+}
+
 async function getPreviousTemperatureEventType(sourceId: string, deviceId: string | null): Promise<string | null> {
   const baseQuery = supabase
     .from('events')
@@ -126,6 +130,7 @@ async function getPreviousTemperatureEventType(sourceId: string, deviceId: strin
 async function notifyTemperatureTransition(params: {
   eventType: string
   previousEventType: string | null
+  organizationId?: string
   deviceName?: string
   message?: string
   payload: unknown
@@ -168,9 +173,31 @@ async function notifyTemperatureTransition(params: {
         `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
       ].join('\n')
 
-  const result = await sendMophNotify(text)
+  const result = await sendMophNotify(text, params.organizationId)
   if (result.status === 'failed') {
     console.error('[iotcenter] Temperature MOPH Notify failed:', result.reason)
+  }
+}
+
+async function notifySensorOffline(params: {
+  organizationId?: string
+  deviceName?: string
+  message?: string
+  payload: unknown
+}): Promise<void> {
+  const minutes = readNumber(params.payload, 'minutesSinceLastContact')
+  const lastContact = (params.payload as Record<string, unknown> | null)?.lastContact
+  const text = [
+    '🚨 แจ้งเตือน Sensor Offline',
+    `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
+    minutes === null ? null : `ไม่ได้รับข้อมูล: ${Math.round(minutes)} นาที`,
+    typeof lastContact === 'string' ? `ข้อมูลล่าสุด: ${lastContact}` : null,
+    params.message || null,
+  ].filter(Boolean).join('\n')
+
+  const result = await sendMophNotify(text, params.organizationId)
+  if (result.status === 'failed') {
+    console.error('[iotcenter] Sensor offline MOPH Notify failed:', result.reason)
   }
 }
 
@@ -427,6 +454,18 @@ export function registerIotcenterRoutes(app: Express) {
       ? await getPreviousTemperatureEventType(source.sourceId, resolvedDeviceId)
       : null
 
+    let wasOffline = false
+    if (process.env.MOPH_NOTIFY_ENABLED === 'true' && isSensorOfflineEvent(event_type) && resolvedDeviceId) {
+      const { data: deviceBefore } = await supabase
+        .from('devices')
+        .select('status, metadata')
+        .eq('id', resolvedDeviceId)
+        .eq('source_id', source.sourceId)
+        .maybeSingle()
+      const metadataBefore = (deviceBefore?.metadata as Record<string, unknown>) || {}
+      wasOffline = deviceBefore?.status === 'offline' || metadataBefore.sensor_status === 'offline'
+    }
+
     const { error } = await supabase.from('events').insert({
       source_id: source.sourceId,
       device_id: resolvedDeviceId,
@@ -480,20 +519,30 @@ export function registerIotcenterRoutes(app: Express) {
       await notifyTemperatureTransition({
         eventType: event_type,
         previousEventType: previousTemperatureEventType,
+        organizationId: source.organizationId,
         deviceName: device_name,
         message,
         payload,
       })
     }
 
-    if ((event_type === 'SENSOR OFFLINE' || event_type === 'SENSOR_OFFLINE') && device_id) {
-      const { data: devData } = await supabase.from('devices').select('metadata').eq('id', device_id).maybeSingle()
+    if (isSensorOfflineEvent(event_type) && resolvedDeviceId) {
+      const { data: devData } = await supabase.from('devices').select('metadata').eq('id', resolvedDeviceId).maybeSingle()
       const devMeta = (devData?.metadata as Record<string, unknown>) || {}
       await supabase
         .from('devices')
         .update({ status: 'offline', updated_at: nowTs, metadata: { ...devMeta, sensor_status: 'offline' } })
-        .eq('id', device_id)
+        .eq('id', resolvedDeviceId)
         .eq('source_id', source.sourceId)
+
+      if (!wasOffline) {
+        await notifySensorOffline({
+          organizationId: source.organizationId,
+          deviceName: device_name,
+          message,
+          payload,
+        })
+      }
     }
 
     if (event_type === 'DEVICE_BOOT' || event_type === 'BOOT_WDT' || event_type === 'BOOT') {

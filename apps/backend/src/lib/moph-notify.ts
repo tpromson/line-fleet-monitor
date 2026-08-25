@@ -6,6 +6,7 @@ type MophNotifyConfig = {
   url: string
   clientKey: string
   secretKey: string
+  organizationId: string
 }
 
 export type MophNotifyResult =
@@ -19,6 +20,7 @@ export function getMophNotifyConfig(): MophNotifyConfig {
     url: process.env.MOPH_NOTIFY_URL || DEFAULT_NOTIFY_URL,
     clientKey: process.env.MOPH_NOTIFY_CLIENT_KEY || '',
     secretKey: process.env.MOPH_NOTIFY_SECRET_KEY || '',
+    organizationId: process.env.MOPH_NOTIFY_ORGANIZATION_ID || '',
   }
 }
 
@@ -50,10 +52,13 @@ function errorReason(error: unknown): string {
   return 'UNKNOWN_ERROR'
 }
 
-export async function sendMophNotify(message: string): Promise<MophNotifyResult> {
+export async function sendMophNotify(message: string, organizationId?: string): Promise<MophNotifyResult> {
   const config = getMophNotifyConfig()
 
   if (!config.enabled) return { status: 'skipped', reason: 'MOPH_NOTIFY_ENABLED is not true' }
+  if (config.organizationId && organizationId !== config.organizationId) {
+    return { status: 'skipped', reason: 'Organization is not allowed for MOPH Notify' }
+  }
   if (!config.clientKey || !config.secretKey) {
     return { status: 'skipped', reason: 'MOPH Notify credentials are incomplete' }
   }

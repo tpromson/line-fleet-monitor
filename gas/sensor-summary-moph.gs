@@ -4,6 +4,7 @@
  * Script Properties:
  *   SENSOR_SUMMARY_BACKEND_URL = https://your-backend.example.com
  *   SENSOR_SUMMARY_API_KEY     = shared key configured on the backend
+ *   SENSOR_SUMMARY_ORGANIZATION_ID = Organization ID allowed to send MOPH Notify
  *
  * Copy the existing sensor list into MOPH_SUMMARY_SENSORS below.
  * This script intentionally has no LINE Access Token or MOPH Client Secret.
@@ -22,6 +23,7 @@ function getMophSummaryConfig() {
   return {
     backendUrl: (props.getProperty('SENSOR_SUMMARY_BACKEND_URL') || '').replace(/\/$/, ''),
     apiKey: props.getProperty('SENSOR_SUMMARY_API_KEY') || '',
+    organizationId: props.getProperty('SENSOR_SUMMARY_ORGANIZATION_ID') || '',
   };
 }
 
@@ -36,7 +38,10 @@ function sendSensorSummaryToMoph(message) {
     var response = UrlFetchApp.fetch(config.backendUrl + '/api/notify/sensor-summary', {
       method: 'post',
       contentType: 'application/json',
-      headers: { 'X-Summary-Key': config.apiKey },
+    headers: {
+      'X-Summary-Key': config.apiKey,
+      'X-Organization-ID': config.organizationId,
+    },
       payload: JSON.stringify({ message: message }),
       muteHttpExceptions: true,
     });

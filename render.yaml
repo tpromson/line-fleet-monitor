@@ -43,6 +43,8 @@ services:
         sync: false
       - key: MOPH_NOTIFY_SECRET_KEY
         sync: false
+      - key: MOPH_NOTIFY_ORGANIZATION_ID
+        value: 0d6aeebd-2b7b-48f5-a8f9-b8224519a9b1
       - key: MOPH_SUMMARY_API_KEY
         sync: false
       - key: SENTRY_DSN

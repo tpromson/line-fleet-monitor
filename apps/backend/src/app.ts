@@ -57,7 +57,7 @@ export function buildApp(): Express {
       res.header('Access-Control-Allow-Origin', origin)
       res.header('Vary', 'Origin')
     }
-    res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Summary-Key')
+    res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Summary-Key, X-Organization-ID')
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     if (req.method === 'OPTIONS') {
       res.sendStatus(204)
@@ -92,7 +92,10 @@ export function buildApp(): Express {
       return
     }
 
-    const result = await sendMophNotify(message)
+    const organizationId = req.header('X-Organization-ID')
+    const result = organizationId
+      ? await sendMophNotify(message, organizationId)
+      : await sendMophNotify(message)
     if (result.status === 'sent') {
       res.json({ status: 'sent' })
       return

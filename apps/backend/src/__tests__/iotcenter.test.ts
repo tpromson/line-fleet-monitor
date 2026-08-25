@@ -198,8 +198,8 @@ describe('iotcenter routes', () => {
       })
 
       expect(res.status).toBe(201)
-      expect(mockSendMophNotify).toHaveBeenCalledWith(expect.stringContaining('28.5'))
-      expect(mockSendMophNotify).toHaveBeenCalledWith(expect.stringContaining('25.0'))
+      expect(mockSendMophNotify).toHaveBeenCalledWith(expect.stringContaining('28.5'), 'org-1')
+      expect(mockSendMophNotify).toHaveBeenCalledWith(expect.stringContaining('25.0'), 'org-1')
     })
 
     it('updates device status on heartbeat event', async () => {
