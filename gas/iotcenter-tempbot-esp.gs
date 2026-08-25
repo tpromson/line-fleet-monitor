@@ -954,6 +954,11 @@ function iotcenterHeartbeat() {
 
 // ============================================================
 // heartbeat — บอก IoTcenter ว่าทำงาน
+// ⚠️ ไม่ส่ง heartbeat เลยถ้าข้อมูลใน Sheet เก่าเกิน 35 นาที — ปล่อยให้
+//    devices.last_seen ฝั่ง backend ค้าง เพื่อให้ cron offline-detection
+//    (ทุก 5 นาที, threshold 35 นาที) จับได้จริงว่า sensor ขาดข้อมูล
+//    ถ้าส่ง heartbeat "ว่าง" ไปเรื่อยๆ ทั้งที่ sensor หยุดส่งจริง
+//    last_seen จะสดตลอด ทำให้ dashboard ไม่มีวันขึ้น Offline
 // ============================================================
 function heartbeat() {
   var iotCfg = getIoTcenterConfig();
@@ -962,14 +967,27 @@ function heartbeat() {
   try {
     var sheet = getTargetSheet();
     var lastRow = sheet.getLastRow();
-    var lastTemp = lastRow >= 2 ? sheet.getRange(lastRow, TEMP_COLUMN).getValue() : null;
+    if (lastRow < 2) return;
+
+    var lastTimestamp = sheet.getRange(lastRow, 1).getValue();
+    var lastDate = parseDate(lastTimestamp);
+    var dataAge = lastDate && !isNaN(lastDate.getTime())
+      ? (new Date().getTime() - lastDate.getTime()) / (1000 * 60)
+      : Infinity;
+
+    if (dataAge > 35) {
+      Logger.log('[heartbeat] Skipped — sheet data is ' + Math.round(dataAge) + ' min old');
+      return;
+    }
+
+    var lastTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue();
 
     IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, {
       lastTemperature: lastTemp,
       lastRow: lastRow
     });
   } catch (e) {
-    IoTcenter.sendHeartbeat();
+    Logger.log('[heartbeat] Error: ' + e.toString());
   }
 }
 
