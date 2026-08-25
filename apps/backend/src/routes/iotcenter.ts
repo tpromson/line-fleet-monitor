@@ -495,9 +495,19 @@ export function registerIotcenterRoutes(app: Express) {
         if (dev) resolvedId = dev.id
       }
       if (resolvedId) {
+        // Same policy as /api/iotcenter/heartbeat: only advance last_seen when this
+        // heartbeat carries a valid, plausible temperature — a bare/empty payload is
+        // not proof the sensor pipeline is alive.
+        const temp = readNumber(payload, 'temperature', 'lastTemperature')
+        const hasValidTemp = temp !== null && !isImplausibleTemp(temp) && !isReconnectOutlierTemp(temp)
+        const { data: dev } = await supabase.from('devices').select('last_seen').eq('id', resolvedId).maybeSingle()
         await supabase
           .from('devices')
-          .update({ status: 'online', last_seen: nowTs, updated_at: nowTs })
+          .update({
+            status: 'online',
+            last_seen: hasValidTemp ? nowTs : (dev?.last_seen ?? nowTs),
+            updated_at: nowTs,
+          })
           .eq('id', resolvedId)
           .eq('source_id', source.sourceId)
       }
@@ -646,11 +656,21 @@ export function registerIotcenterRoutes(app: Express) {
         ? { ...existingMeta, ...metadata, sensor_status: newSensorStatus }
         : existingMeta
 
+      // Only advance last_seen when this heartbeat actually proves the sensor pipeline
+      // is alive (a valid, plausible temperature reading came with it). A "bare"
+      // heartbeat carrying no temperature (e.g. GAS scripts that ping unconditionally
+      // at the end of a scheduled check, even right after detecting a stale-data
+      // condition) is not proof of anything and must not keep last_seen artificially
+      // fresh — otherwise detectOfflineDevices' 35-min threshold never fires no matter
+      // how long the actual sensor has been stuck. This protects every source
+      // regardless of which GAS script version is deployed to it.
+      const nextLastSeen = hasValidTemp ? now : (existing.last_seen ?? now)
+
       await supabase
         .from('devices')
         .update({
           status: hasValidTemp ? 'online' : (sensorOffline ? existing.status : 'online'),
-          last_seen: now,
+          last_seen: nextLastSeen,
           updated_at: now,
           metadata: mergedMeta,
         })

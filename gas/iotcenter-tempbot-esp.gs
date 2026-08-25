@@ -935,7 +935,7 @@ function iotcenterHeartbeat() {
 
   var sheet = getSheet();
   var lastRow = sheet.getLastRow();
-  if (lastRow <= 1) { IoTcenter.sendHeartbeat(); return; }
+  if (lastRow <= 1) return;
 
   var row = sheet.getRange(lastRow, 1, 1, 5).getValues()[0];
   var lastDate = row[0] instanceof Date ? row[0] : new Date(row[0]);
@@ -953,17 +953,18 @@ function iotcenterHeartbeat() {
 }
 
 // ============================================================
-// heartbeat — บอก IoTcenter ว่าทำงาน
-// ⚠️ ไม่ส่ง heartbeat เลยถ้าข้อมูลใน Sheet เก่าเกิน 35 นาที — ปล่อยให้
-//    devices.last_seen ฝั่ง backend ค้าง เพื่อให้ cron offline-detection
-//    (ทุก 5 นาที, threshold 35 นาที) จับได้จริงว่า sensor ขาดข้อมูล
-//    ถ้าส่ง heartbeat "ว่าง" ไปเรื่อยๆ ทั้งที่ sensor หยุดส่งจริง
-//    last_seen จะสดตลอด ทำให้ dashboard ไม่มีวันขึ้น Offline
+// sendFreshHeartbeat — ส่ง heartbeat เฉพาะตอนข้อมูลใน Sheet ยังสดอยู่
+// ⚠️ ใช้แทน IoTcenter.sendHeartbeat() ตรงๆ ทุกจุดในไฟล์นี้ (heartbeat,
+//    checkSensorStatus, checkTemperatureAlert, sendDailySummary,
+//    generateReport เดิมทุกตัวเรียก IoTcenter.sendHeartbeat() แบบไม่มี
+//    เงื่อนไขตอนจบฟังก์ชัน — แม้แต่ตอนที่เพิ่งตรวจพบว่า sensor offline
+//    ไปหมาดๆ ก็ตาม) ถ้าข้อมูลใน Sheet เก่าเกิน 35 นาที จะไม่ส่งอะไรเลย
+//    ปล่อยให้ devices.last_seen ฝั่ง backend ค้างจริง เพื่อให้ cron
+//    offline-detection (ทุก 5 นาที, threshold 35 นาที) จับได้ถูกต้อง
+//    — ไม่งั้น last_seen จะสดตลอด ทำให้ dashboard ไม่มีวันขึ้น Offline
+//    แม้ sensor จะหยุดส่งข้อมูลจริงไปนานแค่ไหนก็ตาม
 // ============================================================
-function heartbeat() {
-  var iotCfg = getIoTcenterConfig();
-  IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
-
+function sendFreshHeartbeat() {
   try {
     var sheet = getTargetSheet();
     var lastRow = sheet.getLastRow();
@@ -980,6 +981,8 @@ function heartbeat() {
       return;
     }
 
+    var iotCfg = getIoTcenterConfig();
+    IoTcenter.init(iotCfg.apiUrl, iotCfg.apiKey, iotCfg.deviceName, iotCfg.deviceType);
     var lastTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue();
 
     IoTcenter.sendHeartbeat(iotCfg.deviceName, iotCfg.deviceType, {
@@ -992,6 +995,13 @@ function heartbeat() {
 }
 
 // ============================================================
+// heartbeat — บอก IoTcenter ว่าทำงาน
+// ============================================================
+function heartbeat() {
+  sendFreshHeartbeat();
+}
+
+// ============================================================
 // checkSensorStatus — ตรวจ Sensor ขาดการติดต่อ
 // ============================================================
 function checkSensorStatus() {
@@ -1000,7 +1010,7 @@ function checkSensorStatus() {
 
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) { IoTcenter.sendHeartbeat(); return; }
+  if (lastRow < 2) { sendFreshHeartbeat(); return; }
 
   var lastValue = sheet.getRange(lastRow, 1).getValue();
   var lastTemp = sheet.getRange(lastRow, TEMP_COLUMN).getValue();
@@ -1040,7 +1050,7 @@ function checkSensorStatus() {
     }
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ============================================================
@@ -1052,7 +1062,7 @@ function checkTemperatureAlert() {
 
   var sheet = getTargetSheet();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) { IoTcenter.sendHeartbeat(); return; }
+  if (lastRow < 2) { sendFreshHeartbeat(); return; }
 
   var lastTimestamp = sheet.getRange(lastRow, 1).getValue();
   var lastDate = parseDate(lastTimestamp);
@@ -1061,7 +1071,7 @@ function checkTemperatureAlert() {
     : Infinity;
 
   if (dataAge > 35) {
-    IoTcenter.sendHeartbeat();
+    sendFreshHeartbeat();
     return;
   }
 
@@ -1083,7 +1093,7 @@ function checkTemperatureAlert() {
     }
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ============================================================
@@ -1140,7 +1150,7 @@ function sendDailySummary() {
     IoTcenter.sendEvent('DAILY_REPORT_EMPTY', 'warning', 'ไม่พบข้อมูลวันที่ ' + targetDateStr, { date: targetDateStr });
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ============================================================
@@ -1204,7 +1214,7 @@ function generateReport(startHour, endHour, periodName, daysOffset) {
     IoTcenter.sendEvent('SHIFT_REPORT_EMPTY', 'warning', 'ไม่พบข้อมูลช่วง ' + periodName, { period: periodName });
   }
 
-  IoTcenter.sendHeartbeat();
+  sendFreshHeartbeat();
 }
 
 // ============================================================

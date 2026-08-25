@@ -207,6 +207,9 @@ describe('iotcenter routes', () => {
       const deviceEq2 = vi.fn().mockResolvedValue({ error: null })
       const deviceEq1 = vi.fn().mockReturnValue({ eq: deviceEq2 })
       const deviceUpdateSpy = vi.fn().mockReturnValue({ eq: deviceEq1 })
+      const deviceSelectMaybeSingle = vi.fn().mockResolvedValue({ data: { last_seen: '2024-01-01T00:00:00.000Z' } })
+      const deviceSelectEq = vi.fn().mockReturnValue({ maybeSingle: deviceSelectMaybeSingle })
+      const deviceSelectSpy = vi.fn().mockReturnValue({ eq: deviceSelectEq })
 
       mockSupabase.from.mockImplementation((table: string) => {
         if (table === 'sources') return mockSourcesResponse({
@@ -214,7 +217,7 @@ describe('iotcenter routes', () => {
           source_type: { name: 'iot' },
         })
         if (table === 'events') return { insert: eventInsertSpy } as any
-        if (table === 'devices') return { update: deviceUpdateSpy } as any
+        if (table === 'devices') return { select: deviceSelectSpy, update: deviceUpdateSpy } as any
         return {} as any
       })
 
@@ -225,6 +228,35 @@ describe('iotcenter routes', () => {
       })
       expect(res.status).toBe(201)
       expect(deviceUpdateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: 'online' }))
+    })
+
+    it('does not advance last_seen on a bare heartbeat event with no temperature', async () => {
+      const eventInsertSpy = vi.fn().mockResolvedValue({ error: null })
+      const deviceEq2 = vi.fn().mockResolvedValue({ error: null })
+      const deviceEq1 = vi.fn().mockReturnValue({ eq: deviceEq2 })
+      const deviceUpdateSpy = vi.fn().mockReturnValue({ eq: deviceEq1 })
+      const staleLastSeen = '2024-01-01T00:00:00.000Z'
+      const deviceSelectMaybeSingle = vi.fn().mockResolvedValue({ data: { last_seen: staleLastSeen } })
+      const deviceSelectEq = vi.fn().mockReturnValue({ maybeSingle: deviceSelectMaybeSingle })
+      const deviceSelectSpy = vi.fn().mockReturnValue({ eq: deviceSelectEq })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'iot' },
+        })
+        if (table === 'events') return { insert: eventInsertSpy } as any
+        if (table === 'devices') return { select: deviceSelectSpy, update: deviceUpdateSpy } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({ device_id: 'dev-1', event_type: 'heartbeat', level: 'info' }),
+      })
+      expect(res.status).toBe(201)
+      expect(deviceUpdateSpy).toHaveBeenCalledWith(expect.objectContaining({ last_seen: staleLastSeen }))
     })
   })
 
