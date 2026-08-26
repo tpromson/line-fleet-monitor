@@ -500,13 +500,20 @@ export function registerIotcenterRoutes(app: Express) {
         // not proof the sensor pipeline is alive.
         const temp = readNumber(payload, 'temperature', 'lastTemperature')
         const hasValidTemp = temp !== null && !isImplausibleTemp(temp) && !isReconnectOutlierTemp(temp)
-        const { data: dev } = await supabase.from('devices').select('last_seen').eq('id', resolvedId).maybeSingle()
+        const { data: dev } = await supabase
+          .from('devices')
+          .select('last_seen, status, metadata')
+          .eq('id', resolvedId)
+          .maybeSingle()
+        const existingMeta = (dev?.metadata as Record<string, unknown>) || {}
+        const sensorOffline = dev?.status === 'offline' || existingMeta.sensor_status === 'offline'
         await supabase
           .from('devices')
           .update({
-            status: 'online',
+            status: hasValidTemp ? 'online' : (sensorOffline ? 'offline' : 'online'),
             last_seen: hasValidTemp ? nowTs : (dev?.last_seen ?? nowTs),
             updated_at: nowTs,
+            metadata: { ...existingMeta, sensor_status: hasValidTemp ? 'online' : (sensorOffline ? 'offline' : (existingMeta.sensor_status ?? 'online')) },
           })
           .eq('id', resolvedId)
           .eq('source_id', source.sourceId)
@@ -648,10 +655,10 @@ export function registerIotcenterRoutes(app: Express) {
       }
 
       const existingMeta = (existing.metadata as Record<string, unknown>) || {}
-      const sensorOffline = existingMeta.sensor_status === 'offline'
+      const sensorOffline = existing.status === 'offline' || existingMeta.sensor_status === 'offline'
       const temp = readNumber(metadata, 'temperature', 'lastTemperature')
       const hasValidTemp = temp !== null && !isImplausibleTemp(temp) && !isReconnectOutlierTemp(temp)
-      const newSensorStatus = hasValidTemp ? 'online' : (existingMeta.sensor_status ?? 'online')
+      const newSensorStatus = hasValidTemp ? 'online' : (sensorOffline ? 'offline' : (existingMeta.sensor_status ?? 'online'))
       const mergedMeta = metadata
         ? { ...existingMeta, ...metadata, sensor_status: newSensorStatus }
         : existingMeta
