@@ -201,6 +201,26 @@ async function notifySensorOffline(params: {
   }
 }
 
+async function notifySensorRecovery(params: {
+  organizationId?: string
+  deviceName?: string
+  message?: string
+  payload: unknown
+}): Promise<void> {
+  const temperature = readNumber(params.payload, 'temperature', 'lastTemperature')
+  const text = [
+    '✅ แจ้งเตือน Sensor กลับมา Online',
+    `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
+    temperature === null ? null : `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
+    params.message || 'Sensor กลับมาทำงานปกติ',
+  ].filter(Boolean).join('\n')
+
+  const result = await sendMophNotify(text, params.organizationId)
+  if (result.status === 'failed') {
+    console.error('[iotcenter] Sensor recovery MOPH Notify failed:', result.reason)
+  }
+}
+
 async function logOutlier(params: {
   sourceId: string
   deviceId: string | null
@@ -455,7 +475,11 @@ export function registerIotcenterRoutes(app: Express) {
       : null
 
     let wasOffline = false
-    if (process.env.MOPH_NOTIFY_ENABLED === 'true' && isSensorOfflineEvent(event_type) && resolvedDeviceId) {
+    if (
+      process.env.MOPH_NOTIFY_ENABLED === 'true' &&
+      (isSensorOfflineEvent(event_type) || event_type === 'SENSOR_RECOVERY') &&
+      resolvedDeviceId
+    ) {
       const { data: deviceBefore } = await supabase
         .from('devices')
         .select('status, metadata')
@@ -560,6 +584,15 @@ export function registerIotcenterRoutes(app: Express) {
           payload,
         })
       }
+    }
+
+    if (event_type === 'SENSOR_RECOVERY' && resolvedDeviceId && wasOffline) {
+      await notifySensorRecovery({
+        organizationId: source.organizationId,
+        deviceName: device_name,
+        message,
+        payload,
+      })
     }
 
     if (event_type === 'DEVICE_BOOT' || event_type === 'BOOT_WDT' || event_type === 'BOOT') {
