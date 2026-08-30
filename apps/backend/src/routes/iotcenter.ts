@@ -80,6 +80,21 @@ function toBangkokDateStr(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { timeZone: BANGKOK_TZ })
 }
 
+function formatBangkokDateTime(value: string | Date): string | null {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleString('th-TH', {
+    timeZone: BANGKOK_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
 function readNumber(payload: unknown, ...keys: string[]): number | null {
   const obj = payload as Record<string, unknown> | null
   if (!obj) return null
@@ -110,6 +125,14 @@ function isTemperatureEvent(eventType: string): boolean {
 
 function isSensorOfflineEvent(eventType: string): boolean {
   return eventType === 'SENSOR OFFLINE' || eventType === 'SENSOR_OFFLINE'
+}
+
+function isFreshSensorRecoveryEvent(eventType: string): boolean {
+  return eventType === 'heartbeat' ||
+    eventType === 'TEMP_NORMAL' ||
+    eventType === 'HIGH_TEMP' ||
+    eventType === 'LOW_TEMP' ||
+    eventType === 'SENSOR_RECOVERY'
 }
 
 async function getPreviousTemperatureEventType(sourceId: string, deviceId: string | null): Promise<string | null> {
@@ -151,26 +174,31 @@ async function notifyTemperatureTransition(params: {
   const threshold = readNumber(params.payload, 'threshold')
   const isHigh = params.eventType === 'HIGH_TEMP'
   const isLow = params.eventType === 'LOW_TEMP'
+  const detectedAt = `ตรวจพบเมื่อ: ${formatBangkokDateTime(new Date()) || '-'}`
   const text = isHigh
     ? [
         '⚠️ แจ้งเตือนอุณหภูมิสูง',
-        `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
-        `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
-        threshold === null ? null : `เกณฑ์: ${threshold.toFixed(1)} °C`,
-        params.message || null,
+        detectedAt,
+        '---------------------------',
+        `📍 ${params.deviceName || 'ไม่ระบุ'}`,
+        `└ อุณหภูมิ: ${temperature.toFixed(1)} °C`,
+        threshold === null ? null : `└ เกณฑ์: ${threshold.toFixed(1)} °C`,
       ].filter(Boolean).join('\n')
     : isLow
       ? [
           '❄️ แจ้งเตือนอุณหภูมิต่ำ',
-          `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
-          `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
-          threshold === null ? null : `เกณฑ์ขั้นต่ำ: ${threshold.toFixed(1)} °C`,
-          params.message || null,
+          detectedAt,
+          '---------------------------',
+          `📍 ${params.deviceName || 'ไม่ระบุ'}`,
+          `└ อุณหภูมิ: ${temperature.toFixed(1)} °C`,
+          threshold === null ? null : `└ เกณฑ์ขั้นต่ำ: ${threshold.toFixed(1)} °C`,
         ].filter(Boolean).join('\n')
     : [
-        '✅ อุณหภูมิกลับสู่ภาวะปกติ',
-        `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
-        `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
+        '✅ แจ้งเตือนอุณหภูมิกลับสู่ปกติ',
+        detectedAt,
+        '---------------------------',
+        `📍 ${params.deviceName || 'ไม่ระบุ'}`,
+        `└ อุณหภูมิ: ${temperature.toFixed(1)} °C`,
       ].join('\n')
 
   const result = await sendMophNotify(text, params.organizationId)
@@ -187,13 +215,21 @@ async function notifySensorOffline(params: {
 }): Promise<void> {
   const minutes = readNumber(params.payload, 'minutesSinceLastContact')
   const lastContact = (params.payload as Record<string, unknown> | null)?.lastContact
+  const formattedLastContact = typeof lastContact === 'string' ? formatBangkokDateTime(lastContact) : null
+  const details = [
+    minutes === null ? null : `└ ไม่ได้รับข้อมูลเกิน ${Math.round(minutes)} นาที`,
+    formattedLastContact ? `└ ล่าสุด: ${formattedLastContact} น.` : null,
+  ].filter(Boolean)
+  if (details.length === 0 && params.message) details.push(`└ ${params.message}`)
   const text = [
     '🚨 แจ้งเตือน Sensor Offline',
-    `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
-    minutes === null ? null : `ไม่ได้รับข้อมูล: ${Math.round(minutes)} นาที`,
-    typeof lastContact === 'string' ? `ข้อมูลล่าสุด: ${lastContact}` : null,
-    params.message || null,
-  ].filter(Boolean).join('\n')
+    `ตรวจพบเมื่อ: ${formatBangkokDateTime(new Date()) || '-'}`,
+    'จำนวน: 1 อุปกรณ์',
+    '---------------------------',
+    '',
+    `📍 ${params.deviceName || 'ไม่ระบุ'}`,
+    ...details,
+  ].filter((line): line is string => line !== null).join('\n')
 
   const result = await sendMophNotify(text, params.organizationId)
   if (result.status === 'failed') {
@@ -210,10 +246,14 @@ async function notifySensorRecovery(params: {
   const temperature = readNumber(params.payload, 'temperature', 'lastTemperature')
   const text = [
     '✅ แจ้งเตือน Sensor กลับมา Online',
-    `อุปกรณ์: ${params.deviceName || 'ไม่ระบุ'}`,
-    temperature === null ? null : `อุณหภูมิ: ${temperature.toFixed(1)} °C`,
-    params.message || 'Sensor กลับมาทำงานปกติ',
-  ].filter(Boolean).join('\n')
+    `ตรวจพบเมื่อ: ${formatBangkokDateTime(new Date()) || '-'}`,
+    'จำนวน: 1 อุปกรณ์',
+    '---------------------------',
+    '',
+    `📍 ${params.deviceName || 'ไม่ระบุ'}`,
+    temperature === null ? '└ เริ่มส่งข้อมูลใหม่แล้ว' : `└ อุณหภูมิล่าสุด: ${temperature.toFixed(1)} °C`,
+    `└ ${params.message || 'Sensor กลับมาทำงานปกติ'}`,
+  ].filter((line): line is string => line !== null).join('\n')
 
   const result = await sendMophNotify(text, params.organizationId)
   if (result.status === 'failed') {
@@ -477,7 +517,7 @@ export function registerIotcenterRoutes(app: Express) {
     let wasOffline = false
     if (
       process.env.MOPH_NOTIFY_ENABLED === 'true' &&
-      (isSensorOfflineEvent(event_type) || event_type === 'SENSOR_RECOVERY') &&
+      (isSensorOfflineEvent(event_type) || isFreshSensorRecoveryEvent(event_type)) &&
       resolvedDeviceId
     ) {
       const { data: deviceBefore } = await supabase
@@ -541,6 +581,15 @@ export function registerIotcenterRoutes(app: Express) {
           })
           .eq('id', resolvedId)
           .eq('source_id', source.sourceId)
+
+        if (wasOffline && hasValidTemp && process.env.MOPH_NOTIFY_ENABLED === 'true') {
+          await notifySensorRecovery({
+            organizationId: source.organizationId,
+            deviceName: device_name,
+            message: 'ได้รับข้อมูลใหม่จาก Sensor แล้ว',
+            payload,
+          })
+        }
       }
     }
 
@@ -586,7 +635,13 @@ export function registerIotcenterRoutes(app: Express) {
       }
     }
 
-    if (event_type === 'SENSOR_RECOVERY' && resolvedDeviceId && wasOffline) {
+    if (
+      isFreshSensorRecoveryEvent(event_type) &&
+      event_type !== 'heartbeat' &&
+      resolvedDeviceId &&
+      wasOffline &&
+      process.env.MOPH_NOTIFY_ENABLED === 'true'
+    ) {
       await notifySensorRecovery({
         organizationId: source.organizationId,
         deviceName: device_name,
@@ -691,6 +746,7 @@ export function registerIotcenterRoutes(app: Express) {
       const sensorOffline = existing.status === 'offline' || existingMeta.sensor_status === 'offline'
       const temp = readNumber(metadata, 'temperature', 'lastTemperature')
       const hasValidTemp = temp !== null && !isImplausibleTemp(temp) && !isReconnectOutlierTemp(temp)
+      const shouldNotifyRecovery = sensorOffline && hasValidTemp
       const newSensorStatus = hasValidTemp ? 'online' : (sensorOffline ? 'offline' : (existingMeta.sensor_status ?? 'online'))
       const mergedMeta = metadata
         ? { ...existingMeta, ...metadata, sensor_status: newSensorStatus }
@@ -729,6 +785,15 @@ export function registerIotcenterRoutes(app: Express) {
         message: `Device ${device_name} heartbeat received`,
         payload: metadata || {},
       })
+
+      if (shouldNotifyRecovery && process.env.MOPH_NOTIFY_ENABLED === 'true') {
+        await notifySensorRecovery({
+          organizationId: source.organizationId,
+          deviceName: device_name,
+          message: 'ได้รับข้อมูลใหม่จาก Sensor แล้ว',
+          payload: metadata,
+        })
+      }
     } else {
       const { data: created } = await supabase
         .from('devices')

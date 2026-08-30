@@ -335,6 +335,46 @@ describe('iotcenter routes', () => {
       expect(res.status).toBe(200)
       expect(deviceUpdateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: 'online' }))
     })
+
+    it('sends MOPH Notify when a valid heartbeat recovers an offline device', async () => {
+      vi.stubEnv('MOPH_NOTIFY_ENABLED', 'true')
+      const updateEq = vi.fn().mockResolvedValue({ error: null })
+      const deviceUpdateSpy = vi.fn().mockReturnValue({ eq: updateEq })
+      const eventInsertSpy = vi.fn().mockResolvedValue({ error: null })
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'sources') return mockSourcesResponse({
+          id: 'src-1', organization_id: 'org-1', active: true,
+          source_type: { name: 'temperature' },
+        })
+        if (table === 'devices') return {
+          ...mockDevicesLookup({
+            id: 'dev-1',
+            status: 'offline',
+            last_seen: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+            metadata: { sensor_status: 'offline' },
+          }),
+          update: deviceUpdateSpy,
+        } as any
+        if (table === 'events') return { insert: eventInsertSpy } as any
+        return {} as any
+      })
+
+      const res = await fetch(`${baseUrl}/api/iotcenter/heartbeat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'valid-key' },
+        body: JSON.stringify({
+          device_name: 'fridge-1',
+          metadata: { lastTemperature: 6.8, lastRow: 37134 },
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(mockSendMophNotify).toHaveBeenCalledWith(
+        expect.stringContaining('กลับมา Online'),
+        'org-1',
+      )
+    })
   })
 
   describe('outlier filter (25°C on reconnect)', () => {
